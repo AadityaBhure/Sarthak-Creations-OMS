@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Select from 'react-select';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
@@ -35,7 +36,16 @@ const ALL_COLUMNS = [
   { key: 'remark',        label: 'Remark' },
 ];
 
-export default function CompletedOrdersPage() {
+export default function CompletedOrdersPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CompletedOrdersPage />
+    </Suspense>
+  );
+}
+
+function CompletedOrdersPage() {
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
