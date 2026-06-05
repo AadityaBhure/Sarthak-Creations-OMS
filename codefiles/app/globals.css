@@ -577,10 +577,28 @@ input, select, textarea {
   background: #fffbf0;
 }
 
-[data-theme="dark"] .data-table td.cell-edited {
-  background: #1a1500;
-  outline-color: #666;
+[data-theme="dark"] .data-table .cell-edited {
+  background-color: rgba(0, 122, 255, 0.05);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-design-confirmed { background-color: #f3f4f6; color: #4b5563; }
+.status-client-approval { background-color: #fef3c7; color: #b45309; }
+.status-finalised { background-color: #dbeafe; color: #1e40af; }
+.status-printing { background-color: #ede9fe; color: #5b21b6; }
+.status-completed { background-color: #d1fae5; color: #065f46; }
+
 
 /* =============================================================================
    TOOLBAR

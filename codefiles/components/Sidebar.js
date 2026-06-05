@@ -29,6 +29,12 @@ const NAV_SECTIONS = [
     ],
   },
   {
+    label: 'Quick Views',
+    links: [
+      { href: '/quick-views', label: 'Manage Views' },
+    ],
+  },
+  {
     label: 'Config',
     links: [
       { href: '/settings', label: 'Settings' },

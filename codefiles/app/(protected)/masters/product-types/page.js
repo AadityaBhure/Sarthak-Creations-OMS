@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import CsvImportModal from '@/components/csv/CsvImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import AlertModal from '@/components/ui/AlertModal';
+import { createBrowserClient } from '@/lib/supabaseClient';
 
 export default function ProductTypesList() {
   const [types, setTypes] = useState([]);
@@ -22,6 +24,11 @@ export default function ProductTypesList() {
   const [newName, setNewName] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+
+  function showAlert(title, message) {
+    setAlertInfo({ isOpen: true, title, message });
+  }
 
   // CSV Import state
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -31,12 +38,24 @@ export default function ProductTypesList() {
 
   // Fetch on mount
   useEffect(() => {
-    fetchTypes();
+    fetchTypes(true);
+
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel('realtime-product-types')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'product_types' }, () => {
+        fetchTypes(false);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  async function fetchTypes() {
+  async function fetchTypes(showLoader = true) {
+    if (showLoader) setLoading(true);
     try {
-      setLoading(true);
       const res = await fetch('/api/product-types');
       if (!res.ok) throw new Error('Failed to fetch product types');
       const data = await res.json();
@@ -95,7 +114,7 @@ export default function ProductTypesList() {
         setPendingEdits(newEdits);
       }
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     }
   }
 
@@ -135,7 +154,7 @@ export default function ProductTypesList() {
           throw new Error(data.error || 'Failed to update');
         }
       } catch (err) {
-        alert(`Error updating product type: ${err.message}`);
+        showAlert('Error', `Error updating product type: ${err.message}`);
         errorCount++;
       }
     }
@@ -313,6 +332,13 @@ export default function ProductTypesList() {
         confirmColor="danger"
         onConfirm={handleDelete}
         onCancel={() => setConfirmModal({ isOpen: false, id: null, name: '' })}
+      />
+
+      <AlertModal
+        isOpen={alertInfo.isOpen}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })}
       />
     </div>
   );

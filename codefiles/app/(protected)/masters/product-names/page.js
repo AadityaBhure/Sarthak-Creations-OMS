@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import CsvImportModal from '@/components/csv/CsvImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import AlertModal from '@/components/ui/AlertModal';
+import { createBrowserClient } from '@/lib/supabaseClient';
 
 export default function ProductNamesList() {
   const [products, setProducts] = useState([]);
@@ -22,6 +24,11 @@ export default function ProductNamesList() {
   const [newName, setNewName] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+
+  function showAlert(title, message) {
+    setAlertInfo({ isOpen: true, title, message });
+  }
 
   // CSV Import state
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -31,12 +38,24 @@ export default function ProductNamesList() {
 
   // Fetch on mount
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(true);
+
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel('realtime-product-names')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'product_names' }, () => {
+        fetchProducts(false);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  async function fetchProducts() {
+  async function fetchProducts(showLoader = true) {
+    if (showLoader) setLoading(true);
     try {
-      setLoading(true);
       const res = await fetch('/api/product-names');
       if (!res.ok) throw new Error('Failed to fetch product names');
       const data = await res.json();
@@ -95,7 +114,7 @@ export default function ProductNamesList() {
         setPendingEdits(newEdits);
       }
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     }
   }
 
@@ -135,7 +154,7 @@ export default function ProductNamesList() {
           throw new Error(data.error || 'Failed to update');
         }
       } catch (err) {
-        alert(`Error updating product name: ${err.message}`);
+        showAlert('Error', `Error updating product name: ${err.message}`);
         errorCount++;
       }
     }
@@ -313,6 +332,13 @@ export default function ProductNamesList() {
         confirmColor="danger"
         onConfirm={handleDelete}
         onCancel={() => setConfirmModal({ isOpen: false, id: null, name: '' })}
+      />
+
+      <AlertModal
+        isOpen={alertInfo.isOpen}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })}
       />
     </div>
   );

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import CsvImportModal from '@/components/csv/CsvImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import AlertModal from '@/components/ui/AlertModal';
+import { createBrowserClient } from '@/lib/supabaseClient';
 
 export default function ClientList() {
   const [clients, setClients] = useState([]);
@@ -22,6 +24,11 @@ export default function ClientList() {
   const [newClient, setNewClient] = useState({ name: '', address: '' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+
+  function showAlert(title, message) {
+    setAlertInfo({ isOpen: true, title, message });
+  }
 
   // CSV Import state
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -31,12 +38,24 @@ export default function ClientList() {
 
   // Fetch clients on mount
   useEffect(() => {
-    fetchClients();
+    fetchClients(true);
+
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel('realtime-clients')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
+        fetchClients(false);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  async function fetchClients() {
+  async function fetchClients(showLoader = true) {
+    if (showLoader) setLoading(true);
     try {
-      setLoading(true);
       const res = await fetch('/api/clients');
       if (!res.ok) throw new Error('Failed to fetch clients');
       const data = await res.json();
@@ -99,7 +118,7 @@ export default function ClientList() {
         setPendingEdits(newEdits);
       }
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     }
   }
 
@@ -142,7 +161,7 @@ export default function ClientList() {
           throw new Error(data.error || 'Failed to update');
         }
       } catch (err) {
-        alert(`Error updating client: ${err.message}`);
+        showAlert('Error', `Error updating client: ${err.message}`);
         errorCount++;
       }
     }
@@ -355,6 +374,13 @@ export default function ClientList() {
         confirmColor="danger"
         onConfirm={handleDelete}
         onCancel={() => setConfirmModal({ isOpen: false, id: null, name: '' })}
+      />
+
+      <AlertModal
+        isOpen={alertInfo.isOpen}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })}
       />
     </div>
   );

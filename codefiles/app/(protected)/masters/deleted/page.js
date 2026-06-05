@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import AlertModal from '@/components/ui/AlertModal';
+import { createBrowserClient } from '@/lib/supabaseClient';
 
 const TABS = [
   { id: 'deleted_clients', label: 'Clients' },
@@ -16,15 +18,58 @@ export default function RecycleBin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Lookup maps for deleted orders to show their names
+  const [masterMaps, setMasterMaps] = useState({ clients: {}, productNames: {}, productTypes: {} });
+
   const [confirm, setConfirm] = useState({ isOpen: false, action: null, id: null, title: '', message: '', btnText: '', color: 'danger' });
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+
+  function showAlert(title, message) {
+    setAlertInfo({ isOpen: true, title, message });
+  }
+
+  // Load masters lookup on mount
+  useEffect(() => {
+    async function loadMasterDict() {
+      try {
+        const [cA, cD, pnA, pnD, ptA, ptD] = await Promise.all([
+          fetch('/api/clients').then(r=>r.json()), fetch('/api/trash/deleted_clients').then(r=>r.json()),
+          fetch('/api/product-names').then(r=>r.json()), fetch('/api/trash/deleted_product_names').then(r=>r.json()),
+          fetch('/api/product-types').then(r=>r.json()), fetch('/api/trash/deleted_product_types').then(r=>r.json())
+        ]);
+        
+        const dict = { clients: {}, productNames: {}, productTypes: {} };
+        [...cA, ...cD].forEach(x => { if(x.id && x.name) dict.clients[x.id] = x.name });
+        [...pnA, ...pnD].forEach(x => { if(x.id && x.name) dict.productNames[x.id] = x.name });
+        [...ptA, ...ptD].forEach(x => { if(x.id && x.name) dict.productTypes[x.id] = x.name });
+        
+        setMasterMaps(dict);
+      } catch (err) {
+        console.error("Failed to load master maps", err);
+      }
+    }
+    loadMasterDict();
+  }, []);
 
   useEffect(() => {
-    fetchDeletedRecords(activeTab);
+    fetchDeletedRecords(activeTab, true);
+
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel(`realtime-${activeTab}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: activeTab }, () => {
+        fetchDeletedRecords(activeTab, false);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [activeTab]);
 
-  async function fetchDeletedRecords(table) {
+  async function fetchDeletedRecords(table, showLoader = true) {
     try {
-      setLoading(true);
+      if (showLoader) setLoading(true);
       const res = await fetch(`/api/trash/${table}`);
       if (!res.ok) throw new Error('Failed to fetch deleted records');
       const data = await res.json();
@@ -32,7 +77,7 @@ export default function RecycleBin() {
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }
 
@@ -77,7 +122,7 @@ export default function RecycleBin() {
 
         setRecords((prev) => prev.filter((r) => r.id !== id));
       } catch (err) {
-        alert(err.message);
+        showAlert('Error', err.message);
       }
     } else if (action === 'delete') {
       try {
@@ -90,12 +135,11 @@ export default function RecycleBin() {
 
         setRecords((prev) => prev.filter((r) => r.id !== id));
       } catch (err) {
-        alert(err.message);
+        showAlert('Error', err.message);
       }
     }
   }
 
-  // Calculate days left before auto-purge
   function getDaysLeft(deletedAt) {
     const deletedDate = new Date(deletedAt);
     const purgeDate = new Date(deletedDate.getTime() + 10 * 24 * 60 * 60 * 1000);
@@ -108,11 +152,43 @@ export default function RecycleBin() {
     return `${diffDays} days left`;
   }
 
+  function renderTableHeaders() {
+    if (activeTab === 'deleted_orders') {
+      return (
+        <tr>
+          <th style={{ width: '40px' }}>Sr.</th>
+          <th style={{ width: '90px' }}>DDE</th>
+          <th style={{ width: '100px' }}>PO Number</th>
+          <th style={{ width: '140px' }}>Client</th>
+          <th style={{ width: '120px' }}>Product Name</th>
+          <th style={{ width: '120px' }}>Product Type</th>
+          <th style={{ width: '60px' }}>Qty</th>
+          <th style={{ width: '130px' }}>Status</th>
+          <th>Remark</th>
+          <th style={{ width: '140px' }}>Date Deleted</th>
+          <th style={{ width: '100px' }}>Auto-Purge</th>
+          <th style={{ width: '140px' }}>Actions</th>
+        </tr>
+      );
+    }
+    return (
+      <tr>
+        <th style={{ width: '5%' }}>Sr. No.</th>
+        <th style={{ width: '35%' }}>Record Data</th>
+        <th style={{ width: '25%' }}>Date Deleted</th>
+        <th style={{ width: '15%' }}>Auto-Purge In</th>
+        <th style={{ width: '20%' }}>Actions</th>
+      </tr>
+    );
+  }
+
   function renderTableContent() {
+    const colCount = activeTab === 'deleted_orders' ? 12 : 5;
+
     if (loading) {
       return (
         <tr>
-          <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+          <td colSpan={colCount} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
             Loading records...
           </td>
         </tr>
@@ -122,7 +198,7 @@ export default function RecycleBin() {
     if (records.length === 0) {
       return (
         <tr>
-          <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+          <td colSpan={colCount} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
             Recycle Bin is empty for this category.
           </td>
         </tr>
@@ -132,13 +208,28 @@ export default function RecycleBin() {
     return records.map((record, index) => (
       <tr key={record.id}>
         <td style={{ color: 'var(--text-secondary)' }}>{index + 1}</td>
-        <td>
-          {activeTab === 'deleted_orders' ? (
-            `PO: ${record.po_number} (Qty: ${record.quantity})`
-          ) : (
+        
+        {activeTab === 'deleted_orders' ? (
+          <>
+            <td>{new Date(record.date_of_entry).toLocaleDateString()}</td>
+            <td><strong>{record.po_number}</strong></td>
+            <td>{masterMaps.clients[record.client_id] || 'Unknown'}</td>
+            <td>{masterMaps.productNames[record.product_name_id] || 'Unknown'}</td>
+            <td>{masterMaps.productTypes[record.product_type_id] || 'Unknown'}</td>
+            <td>{record.quantity}</td>
+            <td>
+              <span className={`status-badge status-${(record.status || '').replace(/\s+/g, '-').toLowerCase()}`}>
+                {record.status}
+              </span>
+            </td>
+            <td>{record.remark}</td>
+          </>
+        ) : (
+          <td>
             <strong>{record.name}</strong>
-          )}
-        </td>
+          </td>
+        )}
+
         <td>{new Date(record.deleted_at).toLocaleString()}</td>
         <td style={{ color: 'var(--status-amber-text)' }}>
           {getDaysLeft(record.deleted_at)}
@@ -149,7 +240,7 @@ export default function RecycleBin() {
               Restore
             </button>
             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--status-red-text)' }} onClick={() => promptPermanentDelete(record.id)}>
-              Delete Forever
+              Delete
             </button>
           </div>
         </td>
@@ -190,16 +281,10 @@ export default function RecycleBin() {
 
       {error && <div className="form-error" style={{ marginBottom: '12px' }}>{error}</div>}
 
-      <div className="table-container">
-        <table className="data-table">
+      <div className="table-container" style={{ overflowX: 'auto' }}>
+        <table className="data-table" style={{ minWidth: activeTab === 'deleted_orders' ? '1400px' : '100%' }}>
           <thead>
-            <tr>
-              <th style={{ width: '5%' }}>Sr. No.</th>
-              <th style={{ width: '35%' }}>Record Data</th>
-              <th style={{ width: '25%' }}>Date Deleted</th>
-              <th style={{ width: '15%' }}>Auto-Purge In</th>
-              <th style={{ width: '20%' }}>Actions</th>
-            </tr>
+            {renderTableHeaders()}
           </thead>
           <tbody>
             {renderTableContent()}
@@ -215,6 +300,13 @@ export default function RecycleBin() {
         confirmColor={confirm.color}
         onConfirm={handleConfirm}
         onCancel={() => setConfirm({ ...confirm, isOpen: false })}
+      />
+
+      <AlertModal
+        isOpen={alertInfo.isOpen}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })}
       />
     </div>
   );

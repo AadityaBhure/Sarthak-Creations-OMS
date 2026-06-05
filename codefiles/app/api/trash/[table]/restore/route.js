@@ -46,6 +46,9 @@ export async function POST(request, { params }) {
       if (insertError.code === '23505') {
         return NextResponse.json({ error: 'A record with this name already exists in the active list. You cannot restore this unless the active one is deleted/renamed.' }, { status: 400 });
       }
+      if (insertError.code === '23503') {
+        return NextResponse.json({ error: 'Cannot restore this Order because the Client or Product it belongs to is currently in the Recycle Bin. Please restore them first.' }, { status: 400 });
+      }
       throw insertError;
     }
 

@@ -45,10 +45,10 @@ export async function DELETE(request, { params }) {
 
     if (fetchError) throw fetchError;
 
-    // 2. Insert into deleted_clients
+    // 2. Upsert into deleted_clients (upsert prevents duplicate key errors if a previous delete partially failed)
     const { error: insertError } = await supabase
       .from('deleted_clients')
-      .insert([client]);
+      .upsert([client]);
 
     if (insertError) throw insertError;
 
@@ -58,7 +58,16 @@ export async function DELETE(request, { params }) {
       .delete()
       .eq('id', id);
 
-    if (deleteError) throw deleteError;
+    if (deleteError) {
+      // ROLLBACK: If the delete fails (e.g., due to an active order Foreign Key constraint),
+      // we immediately remove the ghost copy from the trash to keep the database perfectly clean.
+      await supabase.from('deleted_clients').delete().eq('id', id);
+      
+      if (deleteError.code === '23503') {
+        throw new Error('Cannot delete this Client because it is currently linked to an Active Order. Please delete or reassign the related active orders first.');
+      }
+      throw deleteError;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

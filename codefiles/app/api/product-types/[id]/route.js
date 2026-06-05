@@ -46,7 +46,7 @@ export async function DELETE(request, { params }) {
 
     const { error: insertError } = await supabase
       .from('deleted_product_types')
-      .insert([record]);
+      .upsert([record]);
 
     if (insertError) throw insertError;
 
@@ -55,7 +55,15 @@ export async function DELETE(request, { params }) {
       .delete()
       .eq('id', id);
 
-    if (deleteError) throw deleteError;
+    if (deleteError) {
+      // ROLLBACK: If the delete fails, clean up the ghost copy from the trash
+      await supabase.from('deleted_product_types').delete().eq('id', id);
+
+      if (deleteError.code === '23503') {
+        throw new Error('Cannot delete this Product Type because it is currently linked to an Active Order. Please delete or reassign the related active orders first.');
+      }
+      throw deleteError;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
