@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createServerClient } from '@/lib/supabaseClient';
 import JSZip from 'jszip';
 import Papa from 'papaparse';
 
@@ -8,16 +7,7 @@ export const dynamic = 'force-dynamic'; // Prevent static caching
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get(name) { return cookieStore.get(name)?.value; },
-        },
-      }
-    );
+    const supabase = createServerClient();
 
     // Fetch all records from the database
     const [ordersRes, completedRes, clientsRes, productsRes, typesRes] = await Promise.all([
