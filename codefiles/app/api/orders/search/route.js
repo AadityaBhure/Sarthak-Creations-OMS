@@ -25,33 +25,57 @@ export async function POST(request) {
     }
 
     // Apply dynamic user filters
-    for (const rule of filters) {
-      if (!rule.column || !rule.operator || rule.value === undefined || rule.value === '') continue;
+    if (filters.length > 0) {
+      const hasOr = filters.some((f, i) => i < filters.length - 1 && f.logic === 'or');
       
-      const { column, operator, value } = rule;
+      if (!hasOr) {
+        // Standard high-performance linear filtering (All ANDs)
+        for (const rule of filters) {
+          if (!rule.column || !rule.operator || rule.value === undefined || rule.value === '') continue;
+          const { column, operator, value } = rule;
+          switch (operator) {
+            case 'eq': query = query.eq(column, value); break;
+            case 'neq': query = query.neq(column, value); break;
+            case 'gt': query = query.gt(column, value); break;
+            case 'lt': query = query.lt(column, value); break;
+            case 'gte': query = query.gte(column, value); break;
+            case 'lte': query = query.lte(column, value); break;
+            case 'ilike': query = query.ilike(column, `%${value}%`); break;
+          }
+        }
+      } else {
+        // Complex grouped filtering for mixed AND / OR
+        const orGroups = [];
+        let currentAndGroup = [];
 
-      switch (operator) {
-        case 'eq':
-          query = query.eq(column, value);
-          break;
-        case 'neq':
-          query = query.neq(column, value);
-          break;
-        case 'gt':
-          query = query.gt(column, value);
-          break;
-        case 'lt':
-          query = query.lt(column, value);
-          break;
-        case 'gte':
-          query = query.gte(column, value);
-          break;
-        case 'lte':
-          query = query.lte(column, value);
-          break;
-        case 'ilike':
-          query = query.ilike(column, `%${value}%`);
-          break;
+        for (let i = 0; i < filters.length; i++) {
+          const rule = filters[i];
+          if (!rule.column || !rule.operator || rule.value === undefined || rule.value === '') continue;
+
+          let val = rule.value;
+          if (rule.operator === 'ilike') val = `%${val}%`;
+          // Escape strings with commas, quotes, or parentheses for PostgREST
+          if (typeof val === 'string' && (val.includes(',') || val.includes('"') || val.includes('(') || val.includes(')'))) {
+            val = `"${val.replace(/"/g, '""')}"`;
+          }
+
+          currentAndGroup.push(`${rule.column}.${rule.operator}.${val}`);
+
+          if (rule.logic === 'or' || i === filters.length - 1) {
+            if (currentAndGroup.length > 0) {
+              if (currentAndGroup.length === 1) {
+                orGroups.push(currentAndGroup[0]);
+              } else {
+                orGroups.push(`and(${currentAndGroup.join(',')})`);
+              }
+            }
+            currentAndGroup = [];
+          }
+        }
+
+        if (orGroups.length > 0) {
+          query = query.or(orGroups.join(','));
+        }
       }
     }
 

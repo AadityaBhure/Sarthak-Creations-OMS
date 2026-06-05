@@ -263,8 +263,9 @@ export default function CompletedOrdersPage() {
   function handlePrint() { window.print(); }
 
   function addFilter() {
-    setFilters([...filters, { column: 'po_number', operator: 'eq', value: '' }]);
-    setActiveQuickView({ value: 'custom', label: 'Custom View' }); setPage(1);
+    setFilters([...filters, { column: 'po_number', operator: 'eq', value: '', logic: 'and' }]);
+    setActiveQuickView({ value: 'custom', label: 'Custom View' });
+    setPage(1);
   }
 
   function updateFilter(index, field, val) {
@@ -284,8 +285,12 @@ export default function CompletedOrdersPage() {
 
   function handleQuickViewChange(selected) {
     setActiveQuickView(selected);
-    if (selected.value === 'custom') setFilters([]);
-    else setFilters(selected.filters || []);
+    if (selected.value === 'custom') {
+      setFilters([]);
+    } else {
+      const loadedFilters = (selected.filters || []).map(f => ({ ...f, logic: f.logic || 'and' }));
+      setFilters(loadedFilters);
+    }
     setPage(1);
   }
 
@@ -426,11 +431,23 @@ export default function CompletedOrdersPage() {
             {filters.map((f, i) => {
               const colDef = FILTER_COLUMNS.find(c => c.value === f.column);
               return (
-                <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <div style={{ width: '200px' }}><Select instanceId={`cfilter-col-${i}`} options={FILTER_COLUMNS} styles={tblSelectStyles} value={FILTER_COLUMNS.find(c => c.value === f.column)} onChange={val => updateFilter(i, 'column', val.value)} /></div>
-                  <div style={{ width: '150px' }}><Select instanceId={`cfilter-op-${i}`} options={OPERATORS[colDef.type]} styles={tblSelectStyles} value={OPERATORS[colDef.type].find(o => o.value === f.operator)} onChange={val => updateFilter(i, 'operator', val.value)} /></div>
+                <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ width: '200px' }}><Select instanceId={`c-filter-col-${i}`} options={FILTER_COLUMNS} styles={tblSelectStyles} value={FILTER_COLUMNS.find(c => c.value === f.column)} onChange={val => updateFilter(i, 'column', val.value)} /></div>
+                  <div style={{ width: '150px' }}><Select instanceId={`c-filter-op-${i}`} options={OPERATORS[colDef.type]} styles={tblSelectStyles} value={OPERATORS[colDef.type].find(o => o.value === f.operator)} onChange={val => updateFilter(i, 'operator', val.value)} /></div>
                   {renderFilterValueInput(f, i)}
-                  <button className="btn btn-ghost btn-sm" onClick={() => removeFilter(i)}>✕</button>
+                  <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', color: 'var(--btn-danger-bg)' }} onClick={() => removeFilter(i)}>✕</button>
+                  
+                  {i < filters.length - 1 && (
+                    <select 
+                      className="form-input" 
+                      style={{ height: '32px', padding: '0 12px', fontSize: '14px', width: '100px', fontWeight: '600', marginLeft: '16px', background: 'var(--bg-surface)' }} 
+                      value={f.logic || 'and'} 
+                      onChange={e => updateFilter(i, 'logic', e.target.value)}
+                    >
+                      <option value="and">AND</option>
+                      <option value="or">OR</option>
+                    </select>
+                  )}
                 </div>
               );
             })}
