@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
 
+const BATCH_SIZE = 200;
+
 export async function POST(request) {
   try {
-    const { rows } = await request.json(); // Array of { name }
+    const { rows } = await request.json();
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'No data provided.' }, { status: 400 });
     }
 
-    // Clean data
     const validRows = rows
       .map(row => ({ name: row.name ? row.name.trim() : '' }))
       .filter(row => row.name !== '');
@@ -19,22 +20,25 @@ export async function POST(request) {
     }
 
     const supabase = createServerClient();
-    
-    // Bulk upsert ignoring duplicates
-    const { data, error } = await supabase
-      .from('product_types')
-      .upsert(validRows, { onConflict: 'name', ignoreDuplicates: true })
-      .select();
 
-    if (error) throw error;
+    let totalInserted = 0;
+    for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
+      const batch = validRows.slice(i, i + BATCH_SIZE);
+      const { data, error } = await supabase
+        .from('product_types')
+        .upsert(batch, { onConflict: 'name', ignoreDuplicates: true })
+        .select();
 
-    const insertedCount = data ? data.length : 0;
-    const skippedCount = rows.length - insertedCount;
+      if (error) throw error;
+      totalInserted += data ? data.length : 0;
+    }
 
-    return NextResponse.json({ 
-      success: true, 
-      inserted: insertedCount, 
-      skipped: skippedCount 
+    const skippedCount = validRows.length - totalInserted;
+
+    return NextResponse.json({
+      success: true,
+      inserted: totalInserted,
+      skipped: skippedCount
     });
 
   } catch (error) {

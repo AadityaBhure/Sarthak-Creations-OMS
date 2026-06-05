@@ -13,11 +13,20 @@ export default function ClientList() {
   
   // Search and Filter
   const [search, setSearch] = useState('');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   
   // Editing state
   const [isEditable, setIsEditable] = useState(false);
   const [pendingEdits, setPendingEdits] = useState({}); // { id: { name, address } }
   const [saving, setSaving] = useState(false);
+
+  // Bulk Selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [lastCheckedIndex, setLastCheckedIndex] = useState(null);
+  const [bulkDelConfirm, setBulkDelConfirm] = useState(false);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -108,17 +117,70 @@ export default function ClientList() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete client');
 
-      // Remove from UI
       setClients((prev) => prev.filter((c) => c.id !== id));
       
-      // Clear from pending edits if it was being edited
       if (pendingEdits[id]) {
         const newEdits = { ...pendingEdits };
         delete newEdits[id];
         setPendingEdits(newEdits);
       }
+      const newSel = new Set(selectedIds); newSel.delete(id); setSelectedIds(newSel);
     } catch (err) {
       showAlert('Error', err.message);
+    }
+  }
+
+  // --- BULK SELECTION ---
+  function handleCheckbox(e, clientId, index) {
+    const newSelected = new Set(selectedIds);
+    if (e.shiftKey && lastCheckedIndex !== null) {
+      const start = Math.min(lastCheckedIndex, index);
+      const end   = Math.max(lastCheckedIndex, index);
+      const shouldSelect = !selectedIds.has(clientId);
+      for (let i = start; i <= end; i++) {
+        if (paginatedClients[i]) {
+          if (shouldSelect) newSelected.add(paginatedClients[i].id);
+          else newSelected.delete(paginatedClients[i].id);
+        }
+      }
+    } else {
+      if (newSelected.has(clientId)) newSelected.delete(clientId);
+      else newSelected.add(clientId);
+    }
+    setSelectedIds(newSelected);
+    setLastCheckedIndex(index);
+  }
+
+  function handleSelectAll(e) {
+    if (e.target.checked) setSelectedIds(new Set(paginatedClients.map(c => c.id)));
+    else setSelectedIds(new Set());
+    setLastCheckedIndex(null);
+  }
+
+  async function handleBulkDelete() {
+    setBulkDelConfirm(false);
+    setSaving(true);
+    try {
+      const idsArray = Array.from(selectedIds);
+      const res = await fetch(`/api/clients/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsArray }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete selected clients');
+      
+      if (data.warning) {
+        showAlert('Partial Success', data.warning);
+      }
+      
+      await fetchClients();
+      setSelectedIds(new Set());
+      setLastCheckedIndex(null);
+    } catch (err) {
+      showAlert('Error', err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -183,6 +245,13 @@ export default function ClientList() {
     (c.address && c.address.toLowerCase().includes(search.toLowerCase()))
   );
 
+  // Pagination slice
+  const totalFiltered = filteredClients.length;
+  const paginatedClients = filteredClients.slice((page - 1) * limit, page * limit);
+
+  const allOnPageSelected = paginatedClients.length > 0 && paginatedClients.every(c => selectedIds.has(c.id));
+  const selectedCount = selectedIds.size;
+
   return (
     <div className="masters-page">
       {/* Toolbar */}
@@ -199,7 +268,7 @@ export default function ClientList() {
             className="toolbar-search"
             placeholder="Search clients..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
 
@@ -222,9 +291,12 @@ export default function ClientList() {
         <table className="data-table">
           <thead>
             <tr>
+              <th style={{ width: '40px' }}>
+                <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
+              </th>
               <th style={{ width: '5%' }}>Sr. No.</th>
               <th style={{ width: '30%' }}>Client Name</th>
-              <th style={{ width: '50%' }}>Address</th>
+              <th style={{ width: '45%' }}>Address</th>
               <th style={{ width: '15%' }}>Actions</th>
             </tr>
           </thead>
@@ -242,9 +314,14 @@ export default function ClientList() {
                 </td>
               </tr>
             ) : (
-              filteredClients.map((client, index) => (
-                <tr key={client.id}>
-                  <td style={{ color: 'var(--text-secondary)' }}>{index + 1}</td>
+              paginatedClients.map((client, index) => (
+                <tr key={client.id} style={{ backgroundColor: selectedIds.has(client.id) ? 'var(--table-row-selected)' : undefined }}>
+                  <td>
+                    <input type="checkbox" checked={selectedIds.has(client.id)}
+                      onChange={e => handleCheckbox(e, client.id, index)}
+                      onClick={e => e.stopPropagation()} />
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * limit + index + 1}</td>
                   <td className={pendingEdits[client.id]?.name !== undefined ? 'cell-edited' : ''}>
                     {isEditable ? (
                       <input
@@ -288,15 +365,43 @@ export default function ClientList() {
         </table>
       </div>
 
+      {/* Pagination Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Rows per page:</span>
+          <select className="form-input" style={{ padding: '4px 8px', fontSize: '13px', width: 'auto' }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Showing {totalFiltered === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalFiltered)} of {totalFiltered}</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
+            <button className="btn btn-secondary btn-sm" disabled={page * limit >= totalFiltered} onClick={() => setPage(page + 1)}>Next</button>
+          </div>
+        </div>
+      </div>
       {/* Floating Save Bar for Inline Edits */}
       {hasPendingEdits() && (
         <div className="floating-save">
-          <button className="btn btn-secondary" onClick={discardEdits} disabled={saving}>
-            Discard
-          </button>
+          <button className="btn btn-secondary" onClick={discardEdits} disabled={saving}>Discard</button>
           <button className="btn btn-primary" onClick={saveAllEdits} disabled={saving}>
             {saving ? 'Saving...' : `Save Changes (${Object.keys(pendingEdits).length} edits)`}
           </button>
+        </div>
+      )}
+
+      {/* Floating Bulk Action Bar */}
+      {selectedCount > 0 && !hasPendingEdits() && (
+        <div className="floating-save" style={{ gap: '12px' }}>
+          <span style={{ fontSize: '14px', fontWeight: 600 }}>{selectedCount} selected</span>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => setBulkDelConfirm(true)} disabled={saving}>
+            Delete Selected
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setLastCheckedIndex(null); }}>Clear</button>
         </div>
       )}
 
@@ -374,6 +479,16 @@ export default function ClientList() {
         confirmColor="danger"
         onConfirm={handleDelete}
         onCancel={() => setConfirmModal({ isOpen: false, id: null, name: '' })}
+      />
+
+      <ConfirmModal
+        isOpen={bulkDelConfirm}
+        title="Delete Selected Clients"
+        message={`Are you sure you want to delete ${selectedCount} selected clients? They will all be moved to the Recycle Bin.`}
+        confirmText="Delete All"
+        confirmColor="danger"
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDelConfirm(false)}
       />
 
       <AlertModal

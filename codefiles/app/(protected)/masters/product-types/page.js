@@ -13,11 +13,20 @@ export default function ProductTypesList() {
   
   // Search
   const [search, setSearch] = useState('');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   
   // Editing state
   const [isEditable, setIsEditable] = useState(false);
   const [pendingEdits, setPendingEdits] = useState({}); // { id: { name } }
   const [saving, setSaving] = useState(false);
+
+  // Bulk Selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [lastCheckedIndex, setLastCheckedIndex] = useState(null);
+  const [bulkDelConfirm, setBulkDelConfirm] = useState(false);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -101,20 +110,65 @@ export default function ProductTypesList() {
   async function handleDelete() {
     const { id } = confirmModal;
     setConfirmModal({ isOpen: false, id: null, name: '' });
-
     try {
       const res = await fetch(`/api/product-types/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete product type');
-
       setTypes((prev) => prev.filter((p) => p.id !== id));
-      if (pendingEdits[id]) {
-        const newEdits = { ...pendingEdits };
-        delete newEdits[id];
-        setPendingEdits(newEdits);
+      if (pendingEdits[id]) { const e = { ...pendingEdits }; delete e[id]; setPendingEdits(e); }
+      const newSel = new Set(selectedIds); newSel.delete(id); setSelectedIds(newSel);
+    } catch (err) { showAlert('Error', err.message); }
+  }
+
+  function handleCheckbox(e, typeId, index) {
+    const newSelected = new Set(selectedIds);
+    if (e.shiftKey && lastCheckedIndex !== null) {
+      const start = Math.min(lastCheckedIndex, index);
+      const end   = Math.max(lastCheckedIndex, index);
+      const shouldSelect = !selectedIds.has(typeId);
+      for (let i = start; i <= end; i++) {
+        if (paginatedTypes[i]) {
+          if (shouldSelect) newSelected.add(paginatedTypes[i].id);
+          else newSelected.delete(paginatedTypes[i].id);
+        }
       }
+    } else {
+      if (newSelected.has(typeId)) newSelected.delete(typeId);
+      else newSelected.add(typeId);
+    }
+    setSelectedIds(newSelected);
+    setLastCheckedIndex(index);
+  }
+
+  function handleSelectAll(e) {
+    if (e.target.checked) setSelectedIds(new Set(paginatedTypes.map(t => t.id)));
+    else setSelectedIds(new Set());
+    setLastCheckedIndex(null);
+  }
+
+  async function handleBulkDelete() {
+    setBulkDelConfirm(false); setSaving(true);
+    try {
+      const idsArray = Array.from(selectedIds);
+      const res = await fetch(`/api/product-types/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsArray }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete selected product types');
+      
+      if (data.warning) {
+        showAlert('Partial Success', data.warning);
+      }
+      
+      await fetchTypes();
+      setSelectedIds(new Set());
+      setLastCheckedIndex(null);
     } catch (err) {
       showAlert('Error', err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -174,6 +228,12 @@ export default function ProductTypesList() {
     t.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const totalFiltered = filteredTypes.length;
+  const paginatedTypes = filteredTypes.slice((page - 1) * limit, page * limit);
+
+  const allOnPageSelected = paginatedTypes.length > 0 && paginatedTypes.every(t => selectedIds.has(t.id));
+  const selectedCount = selectedIds.size;
+
   return (
     <div className="masters-page">
       <div className="toolbar" style={{ justifyContent: 'space-between' }}>
@@ -189,7 +249,7 @@ export default function ProductTypesList() {
             className="toolbar-search"
             placeholder="Search product types..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
 
@@ -211,8 +271,11 @@ export default function ProductTypesList() {
         <table className="data-table">
           <thead>
             <tr>
+              <th style={{ width: '40px' }}>
+                <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
+              </th>
               <th style={{ width: '10%' }}>Sr. No.</th>
-              <th style={{ width: '75%' }}>Product Type</th>
+              <th style={{ width: '65%' }}>Product Type</th>
               <th style={{ width: '15%' }}>Actions</th>
             </tr>
           </thead>
@@ -230,9 +293,14 @@ export default function ProductTypesList() {
                 </td>
               </tr>
             ) : (
-              filteredTypes.map((type, index) => (
-                <tr key={type.id}>
-                  <td style={{ color: 'var(--text-secondary)' }}>{index + 1}</td>
+              paginatedTypes.map((type, index) => (
+                <tr key={type.id} style={{ backgroundColor: selectedIds.has(type.id) ? 'var(--table-row-selected)' : undefined }}>
+                  <td>
+                    <input type="checkbox" checked={selectedIds.has(type.id)}
+                      onChange={e => handleCheckbox(e, type.id, index)}
+                      onClick={e => e.stopPropagation()} />
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * limit + index + 1}</td>
                   <td className={pendingEdits[type.id] !== undefined ? 'cell-edited' : ''}>
                     {isEditable ? (
                       <input
@@ -262,14 +330,39 @@ export default function ProductTypesList() {
         </table>
       </div>
 
+      {/* Pagination Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Rows per page:</span>
+          <select className="form-input" style={{ padding: '4px 8px', fontSize: '13px', width: 'auto' }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Showing {totalFiltered === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalFiltered)} of {totalFiltered}</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
+            <button className="btn btn-secondary btn-sm" disabled={page * limit >= totalFiltered} onClick={() => setPage(page + 1)}>Next</button>
+          </div>
+        </div>
+      </div>
       {hasPendingEdits() && (
         <div className="floating-save">
-          <button className="btn btn-secondary" onClick={discardEdits} disabled={saving}>
-            Discard
-          </button>
+          <button className="btn btn-secondary" onClick={discardEdits} disabled={saving}>Discard</button>
           <button className="btn btn-primary" onClick={saveAllEdits} disabled={saving}>
             {saving ? 'Saving...' : `Save Changes (${Object.keys(pendingEdits).length} edits)`}
           </button>
+        </div>
+      )}
+
+      {selectedCount > 0 && !hasPendingEdits() && (
+        <div className="floating-save" style={{ gap: '12px' }}>
+          <span style={{ fontSize: '14px', fontWeight: 600 }}>{selectedCount} selected</span>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => setBulkDelConfirm(true)} disabled={saving}>Delete Selected</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setLastCheckedIndex(null); }}>Clear</button>
         </div>
       )}
 
@@ -328,10 +421,17 @@ export default function ProductTypesList() {
         isOpen={confirmModal.isOpen}
         title="Delete Product Type"
         message={`Are you sure you want to delete "${confirmModal.name}"?\nIt will be safely moved to the Recycle Bin.`}
-        confirmText="Delete"
-        confirmColor="danger"
+        confirmText="Delete" confirmColor="danger"
         onConfirm={handleDelete}
         onCancel={() => setConfirmModal({ isOpen: false, id: null, name: '' })}
+      />
+      <ConfirmModal
+        isOpen={bulkDelConfirm}
+        title="Delete Selected Product Types"
+        message={`Delete ${selectedCount} selected product types? They will be moved to the Recycle Bin.`}
+        confirmText="Delete All" confirmColor="danger"
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDelConfirm(false)}
       />
 
       <AlertModal

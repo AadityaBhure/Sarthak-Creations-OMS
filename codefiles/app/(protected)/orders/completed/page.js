@@ -1,36 +1,48 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Select from 'react-select';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
 
 const STATUS_OPTIONS = [
-  'Completed'
+  'Design Confirmed', 'Client Approval', 'Finalised', 'Printing', 'Completed'
 ].map(s => ({ value: s, label: s }));
 
 const FILTER_COLUMNS = [
-  { value: 'po_number', label: 'PO Number', type: 'text' },
-  { value: 'client_id', label: 'Client', type: 'select' },
-  { value: 'product_name_id', label: 'Product Name', type: 'select' },
-  { value: 'product_type_id', label: 'Product Type', type: 'select' },
-  { value: 'quantity', label: 'Quantity', type: 'number' },
-  { value: 'date_of_entry', label: 'Date of Entry', type: 'date' }
+  { value: 'po_number',      label: 'PO Number',    type: 'text' },
+  { value: 'client_id',      label: 'Client',       type: 'select' },
+  { value: 'product_name_id',label: 'Product Name', type: 'select' },
+  { value: 'product_type_id',label: 'Product Type', type: 'select' },
+  { value: 'quantity',       label: 'Quantity',     type: 'number' },
+  { value: 'date_of_entry',  label: 'Date of Entry',type: 'date' }
 ];
 
 const OPERATORS = {
-  text: [ { value: 'eq', label: 'Equals' }, { value: 'ilike', label: 'Contains' } ],
-  select: [ { value: 'eq', label: 'Is' }, { value: 'neq', label: 'Is Not' } ],
-  number: [ { value: 'eq', label: '=' }, { value: 'gt', label: '>' }, { value: 'lt', label: '<' }, { value: 'gte', label: '>=' }, { value: 'lte', label: '<=' } ],
-  date: [ { value: 'eq', label: 'On' }, { value: 'gte', label: 'On or After' }, { value: 'lte', label: 'On or Before' } ]
+  text:   [{ value: 'eq', label: 'Equals' }, { value: 'ilike', label: 'Contains' }],
+  select: [{ value: 'eq', label: 'Is' }, { value: 'neq', label: 'Is Not' }],
+  number: [{ value: 'eq', label: '=' }, { value: 'gt', label: '>' }, { value: 'lt', label: '<' }, { value: 'gte', label: '>=' }, { value: 'lte', label: '<=' }],
+  date:   [{ value: 'eq', label: 'On' }, { value: 'gte', label: 'On or After' }, { value: 'lte', label: 'On or Before' }]
 };
+
+const ALL_COLUMNS = [
+  { key: 'date_of_entry', label: 'Date' },
+  { key: 'po_number',     label: 'PO Number' },
+  { key: 'client',        label: 'Client' },
+  { key: 'product_name',  label: 'Product Name' },
+  { key: 'product_type',  label: 'Product Type' },
+  { key: 'quantity',      label: 'Qty' },
+  { key: 'age',           label: 'Age' },
+  { key: 'status',        label: 'Status' },
+  { key: 'remark',        label: 'Remark' },
+];
 
 export default function CompletedOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   const [clients, setClients] = useState([]);
   const [productNames, setProductNames] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
@@ -42,21 +54,43 @@ export default function CompletedOrdersPage() {
   const [quickViews, setQuickViews] = useState([]);
   const [activeQuickView, setActiveQuickView] = useState({ value: 'custom', label: 'Custom View' });
 
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [lastCheckedIndex, setLastCheckedIndex] = useState(null);
+
   const [pendingUpdates, setPendingUpdates] = useState(0);
   const [isEditable, setIsEditable] = useState(false);
   const [pendingEdits, setPendingEdits] = useState({});
   const [saving, setSaving] = useState(false);
 
+  // Print date (client-only to avoid hydration mismatch)
+  const [printDate, setPrintDate] = useState('');
+
+  const [visibleCols, setVisibleCols] = useState(new Set(ALL_COLUMNS.map(c => c.key)));
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+
+  const [bulkStatus, setBulkStatus] = useState(null);
+  const [bulkDelConfirm, setBulkDelConfirm] = useState(false);
+
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null, po: '' });
-  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+  const [alertInfo, setAlertInfo]  = useState({ isOpen: false, title: '', message: '' });
   const [viewPrompt, setViewPrompt] = useState({ isOpen: false, viewName: '' });
+
+  const colMenuRef = useRef(null);
 
   function showAlert(title, message) { setAlertInfo({ isOpen: true, title, message }); }
 
   useEffect(() => {
+    function handleClickOutside(e) {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setColMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setPrintDate(new Date().toLocaleString());
     fetchMasters();
     fetchQuickViews();
-    
     const supabase = createBrowserClient();
     const channel = supabase
       .channel('realtime-completed-orders')
@@ -72,18 +106,9 @@ export default function CompletedOrdersPage() {
       const [cliRes, pNameRes, pTypeRes] = await Promise.all([
         fetch('/api/clients'), fetch('/api/product-names'), fetch('/api/product-types')
       ]);
-      if (cliRes.ok) {
-        const d = await cliRes.json();
-        setClients(d.map(x => ({ value: x.id, label: x.name })));
-      }
-      if (pNameRes.ok) {
-        const d = await pNameRes.json();
-        setProductNames(d.map(x => ({ value: x.id, label: x.name })));
-      }
-      if (pTypeRes.ok) {
-        const d = await pTypeRes.json();
-        setProductTypes(d.map(x => ({ value: x.id, label: x.name })));
-      }
+      if (cliRes.ok) { const d = await cliRes.json(); setClients(d.map(x => ({ value: x.id, label: x.name }))); }
+      if (pNameRes.ok) { const d = await pNameRes.json(); setProductNames(d.map(x => ({ value: x.id, label: x.name }))); }
+      if (pTypeRes.ok) { const d = await pTypeRes.json(); setProductTypes(d.map(x => ({ value: x.id, label: x.name }))); }
     } catch (err) { console.error(err); }
   }
 
@@ -111,34 +136,129 @@ export default function CompletedOrdersPage() {
       setOrders(data.data);
       setTotalRowCount(data.meta.totalRowCount);
       setPendingUpdates(0);
+      setSelectedIds(new Set());
+      setLastCheckedIndex(null);
     } catch (err) { setError(err.message); } finally { if (showLoader) setLoading(false); }
   }
 
+  function handleCheckbox(e, orderId, index) {
+    const newSelected = new Set(selectedIds);
+    if (e.shiftKey && lastCheckedIndex !== null) {
+      const start = Math.min(lastCheckedIndex, index);
+      const end   = Math.max(lastCheckedIndex, index);
+      const shouldSelect = !selectedIds.has(orderId);
+      for (let i = start; i <= end; i++) {
+        if (orders[i]) { if (shouldSelect) newSelected.add(orders[i].id); else newSelected.delete(orders[i].id); }
+      }
+    } else {
+      if (newSelected.has(orderId)) newSelected.delete(orderId);
+      else newSelected.add(orderId);
+    }
+    setSelectedIds(newSelected);
+    setLastCheckedIndex(index);
+  }
+
+  function handleSelectAll(e) {
+    if (e.target.checked) setSelectedIds(new Set(orders.map(o => o.id)));
+    else setSelectedIds(new Set());
+    setLastCheckedIndex(null);
+  }
+
+  const allOnPageSelected = orders.length > 0 && orders.every(o => selectedIds.has(o.id));
+
+  async function handleBulkStatusUpdate() {
+    if (!bulkStatus) return;
+    setSaving(true);
+    let errorCount = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: bulkStatus.value }) });
+        if (!res.ok) throw new Error('Failed');
+      } catch { errorCount++; }
+    }
+    setSaving(false);
+    if (errorCount > 0) showAlert('Error', `${errorCount} orders failed to update.`);
+    else showAlert('Success', `${selectedIds.size} orders updated to "${bulkStatus.label}".`);
+    setBulkStatus(null);
+    await fetchOrders(true);
+  }
+
+  async function handleBulkDelete() {
+    setBulkDelConfirm(false);
+    setSaving(true);
+    let errorCount = 0;
+    for (const id of selectedIds) {
+      try {
+        const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed');
+      } catch { errorCount++; }
+    }
+    setSaving(false);
+    if (errorCount > 0) showAlert('Error', `${errorCount} orders could not be deleted.`);
+    await fetchOrders(true);
+  }
+
+  function calcDaysOld(dateStr) {
+    const diffTime = Math.abs(new Date() - new Date(dateStr));
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  function exportCSV() {
+    const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
+    const headers = ['Sr.', 'Date', 'PO Number', 'Client', 'Product Name', 'Product Type', 'Quantity', 'Age (days)', 'Status', 'Remark'];
+    const csvRows = [
+      headers.join(','),
+      ...rows.map((o, i) => [
+        i + 1, new Date(o.date_of_entry).toLocaleDateString(), `"${o.po_number || ''}"`,
+        `"${o.clients?.name || ''}"`, `"${o.product_names?.name || ''}"`, `"${o.product_types?.name || ''}"`,
+        o.quantity, calcDaysOld(o.date_of_entry), `"${o.status || ''}"`, `"${(o.remark || '').replace(/"/g, '""')}"`
+      ].join(','))
+    ];
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `completed-orders-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportPDF() {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
+    doc.setFontSize(14); doc.text('Sarthak Creations — Completed Orders', 14, 15);
+    doc.setFontSize(9); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+    autoTable(doc, {
+      startY: 28,
+      head: [['Sr.', 'Date', 'PO Number', 'Client', 'Product Name', 'Product Type', 'Qty', 'Age', 'Status', 'Remark']],
+      body: rows.map((o, i) => [i + 1, new Date(o.date_of_entry).toLocaleDateString(), o.po_number || '',
+        o.clients?.name || '', o.product_names?.name || '', o.product_types?.name || '',
+        o.quantity, `${calcDaysOld(o.date_of_entry)}d`, o.status || '', o.remark || '']),
+      styles: { fontSize: 8 }, headStyles: { fillColor: [30, 30, 30] }
+    });
+    doc.save(`completed-orders-${new Date().toISOString().slice(0,10)}.pdf`);
+  }
+
+  function handlePrint() { window.print(); }
+
   function addFilter() {
     setFilters([...filters, { column: 'po_number', operator: 'eq', value: '' }]);
-    setActiveQuickView({ value: 'custom', label: 'Custom View' });
-    setPage(1);
+    setActiveQuickView({ value: 'custom', label: 'Custom View' }); setPage(1);
   }
 
   function updateFilter(index, field, val) {
-    const newFilters = [...filters];
-    newFilters[index][field] = val;
+    const newFilters = [...filters]; newFilters[index][field] = val;
     if (field === 'column') {
       const colDef = FILTER_COLUMNS.find(c => c.value === val);
       newFilters[index].operator = OPERATORS[colDef.type][0].value;
       newFilters[index].value = '';
     }
-    setFilters(newFilters);
-    setActiveQuickView({ value: 'custom', label: 'Custom View' });
-    setPage(1);
+    setFilters(newFilters); setActiveQuickView({ value: 'custom', label: 'Custom View' }); setPage(1);
   }
 
   function removeFilter(index) {
-    const newFilters = [...filters];
-    newFilters.splice(index, 1);
-    setFilters(newFilters);
-    setActiveQuickView({ value: 'custom', label: 'Custom View' });
-    setPage(1);
+    const newFilters = [...filters]; newFilters.splice(index, 1);
+    setFilters(newFilters); setActiveQuickView({ value: 'custom', label: 'Custom View' }); setPage(1);
   }
 
   function handleQuickViewChange(selected) {
@@ -155,14 +275,10 @@ export default function CompletedOrdersPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: viewPrompt.viewName, module: 'completed_orders', filters })
       });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error || 'Failed to save view');
-      }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to save view'); }
       const newView = await res.json();
       const newOption = { value: newView.id, label: newView.name, filters: newView.filters };
-      setQuickViews([...quickViews, newOption]);
-      setActiveQuickView(newOption);
+      setQuickViews([...quickViews, newOption]); setActiveQuickView(newOption);
       setViewPrompt({ isOpen: false, viewName: '' });
       showAlert('Success', 'Quick View saved globally.');
     } catch (err) { showAlert('Error', err.message); }
@@ -178,20 +294,16 @@ export default function CompletedOrdersPage() {
       if (filter.column === 'product_type_id') options = productTypes;
       return (
         <div style={{ width: '250px' }}>
-          <Select 
-            options={options} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+          <Select options={options} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
             value={options.find(o => o.value === filter.value) || null}
-            onChange={val => updateFilter(index, 'value', val ? val.value : '')} placeholder="Select value..."
-          />
+            onChange={val => updateFilter(index, 'value', val ? val.value : '')} placeholder="Select value..." />
         </div>
       );
     }
     return (
-      <input 
-        type={colDef.type === 'number' ? 'number' : colDef.type === 'date' ? 'date' : 'text'}
+      <input type={colDef.type === 'number' ? 'number' : colDef.type === 'date' ? 'date' : 'text'}
         className="form-input" style={{ height: '32px', padding: '4px 8px', fontSize: '13px', width: '250px', boxSizing: 'border-box' }}
-        value={filter.value} onChange={e => updateFilter(index, 'value', e.target.value)} placeholder="Enter value..."
-      />
+        value={filter.value} onChange={e => updateFilter(index, 'value', e.target.value)} placeholder="Enter value..." />
     );
   }
 
@@ -202,39 +314,34 @@ export default function CompletedOrdersPage() {
     setConfirmModal({ isOpen: false, id: null, po: '' });
     try {
       const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to delete order');
-      }
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'Failed to delete order'); }
       fetchOrders(false);
-      if (pendingEdits[id]) {
-        const newEdits = { ...pendingEdits };
-        delete newEdits[id];
-        setPendingEdits(newEdits);
-      }
+      const newEdits = { ...pendingEdits }; delete newEdits[id]; setPendingEdits(newEdits);
     } catch (err) { showAlert('Error', err.message); }
   }
 
   function handleCellChange(id, field, value) { setPendingEdits(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } })); }
-  function getDisplayValue(order, field) { return (pendingEdits[order.id] && pendingEdits[order.id][field] !== undefined) ? pendingEdits[order.id][field] : order[field]; }
+  function getDisplayValue(order, field) { return (pendingEdits[order.id]?.[field] !== undefined) ? pendingEdits[order.id][field] : order[field]; }
   function hasPendingEdits() { return Object.keys(pendingEdits).length > 0; }
+
   async function saveAllEdits() {
-    setSaving(true);
-    let errorCount = 0;
+    setSaving(true); let errorCount = 0;
     for (const [id, changes] of Object.entries(pendingEdits)) {
       try {
         const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
         if (!res.ok) throw new Error('Failed to update');
-      } catch (err) { showAlert('Error', `Error updating order: ${err.message}`); errorCount++; }
+      } catch (err) { showAlert('Error', `Error: ${err.message}`); errorCount++; }
     }
     if (errorCount === 0) { setPendingEdits({}); await fetchOrders(true); }
     setSaving(false);
   }
+
   function discardEdits() { setPendingEdits({}); }
-  function calcDaysOld(dateStr) {
-    const entryDate = new Date(dateStr);
-    const diffTime = Math.abs(new Date() - entryDate);
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  function toggleCol(key) {
+    const next = new Set(visibleCols);
+    if (next.has(key)) { if (next.size > 1) next.delete(key); } else next.add(key);
+    setVisibleCols(next);
   }
 
   const tblSelectStyles = {
@@ -248,13 +355,31 @@ export default function CompletedOrdersPage() {
     dropdownIndicator: base => ({ ...base, padding: '2px 8px' })
   };
 
+  const selectedCount = selectedIds.size;
+
   return (
     <div className="masters-page">
       <div className="toolbar" style={{ justifyContent: 'space-between', marginBottom: '16px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <h2 style={{margin:0, fontSize: '20px'}}>Completed Orders</h2>
+          <h2 style={{ margin: 0, fontSize: '20px' }}>Completed Orders</h2>
+          <button className="btn btn-secondary btn-sm" onClick={exportCSV}>Export CSV</button>
+          <button className="btn btn-secondary btn-sm" onClick={exportPDF}>Export PDF</button>
+          <button className="btn btn-secondary btn-sm" onClick={handlePrint}>Print</button>
         </div>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ position: 'relative' }} ref={colMenuRef}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setColMenuOpen(v => !v)}>Columns ▾</button>
+            {colMenuOpen && (
+              <div style={{ position: 'absolute', right: 0, top: '36px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px', zIndex: 9999, minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {ALL_COLUMNS.map(col => (
+                  <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', padding: '2px 4px' }}>
+                    <input type="checkbox" checked={visibleCols.has(col.key)} onChange={() => toggleCol(col.key)} />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <label className="editable-toggle">
             <input type="checkbox" checked={isEditable} onChange={(e) => setIsEditable(e.target.checked)} /> Editable
           </label>
@@ -265,14 +390,9 @@ export default function CompletedOrdersPage() {
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: filters.length > 0 ? '16px' : '0' }}>
           <strong style={{ fontSize: '14px' }}>Quick Views:</strong>
           <div style={{ width: '250px' }}>
-            <Select 
-              options={[{ value: 'custom', label: 'Custom View' }, ...quickViews]}
-              value={activeQuickView}
-              onChange={handleQuickViewChange}
-              styles={tblSelectStyles}
-            />
+            <Select instanceId="qv-completed" options={[{ value: 'custom', label: 'Custom View' }, ...quickViews]} value={activeQuickView} onChange={handleQuickViewChange} styles={tblSelectStyles} />
           </div>
-          {activeQuickView && activeQuickView.value === 'custom' && filters.length > 0 && (
+          {activeQuickView?.value === 'custom' && filters.length > 0 && (
             <button className="btn btn-secondary btn-sm" onClick={() => setViewPrompt({ isOpen: true, viewName: '' })}>Save as Quick View</button>
           )}
           {filters.length === 0 && (
@@ -285,12 +405,8 @@ export default function CompletedOrdersPage() {
               const colDef = FILTER_COLUMNS.find(c => c.value === f.column);
               return (
                 <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <div style={{ width: '200px' }}>
-                    <Select options={FILTER_COLUMNS} styles={tblSelectStyles} value={FILTER_COLUMNS.find(c => c.value === f.column)} onChange={val => updateFilter(i, 'column', val.value)} />
-                  </div>
-                  <div style={{ width: '150px' }}>
-                    <Select options={OPERATORS[colDef.type]} styles={tblSelectStyles} value={OPERATORS[colDef.type].find(o => o.value === f.operator)} onChange={val => updateFilter(i, 'operator', val.value)} />
-                  </div>
+                  <div style={{ width: '200px' }}><Select instanceId={`cfilter-col-${i}`} options={FILTER_COLUMNS} styles={tblSelectStyles} value={FILTER_COLUMNS.find(c => c.value === f.column)} onChange={val => updateFilter(i, 'column', val.value)} /></div>
+                  <div style={{ width: '150px' }}><Select instanceId={`cfilter-op-${i}`} options={OPERATORS[colDef.type]} styles={tblSelectStyles} value={OPERATORS[colDef.type].find(o => o.value === f.operator)} onChange={val => updateFilter(i, 'operator', val.value)} /></div>
                   {renderFilterValueInput(f, i)}
                   <button className="btn btn-ghost btn-sm" onClick={() => removeFilter(i)}>✕</button>
                 </div>
@@ -309,68 +425,97 @@ export default function CompletedOrdersPage() {
 
       {error && <div className="form-error" style={{ marginBottom: '12px' }}>{error}</div>}
 
+      <div className="print-only" style={{ display: 'none', marginBottom: '16px' }}>
+        <h2 style={{ margin: 0 }}>Sarthak Creations — Completed Orders</h2>
+        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#555' }}>Printed: {printDate}</p>
+      </div>
+
       <div className="table-container" style={{ overflowX: 'auto' }}>
-        <table className="data-table" style={{ minWidth: '1200px' }}>
+        <table className="data-table" style={{ minWidth: '900px' }}>
           <thead>
             <tr>
+              <th style={{ width: '40px' }} className="no-print">
+                <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
+              </th>
               <th style={{ width: '40px' }}>Sr.</th>
-              <th style={{ width: '120px' }}>Date</th>
-              <th style={{ width: '100px' }}>PO Number</th>
-              <th style={{ width: '180px' }}>Client</th>
-              <th style={{ width: '150px' }}>Product Name</th>
-              <th style={{ width: '150px' }}>Product Type</th>
-              <th style={{ width: '70px' }}>Qty</th>
-              <th style={{ width: '60px' }}>Age</th>
-              <th style={{ width: '140px' }}>Status</th>
-              <th>Remark</th>
-              <th style={{ width: '80px' }}>Actions</th>
+              {visibleCols.has('date_of_entry') && <th style={{ width: '110px' }}>Date</th>}
+              {visibleCols.has('po_number')     && <th style={{ width: '100px' }}>PO Number</th>}
+              {visibleCols.has('client')        && <th style={{ width: '170px' }}>Client</th>}
+              {visibleCols.has('product_name')  && <th style={{ width: '150px' }}>Product Name</th>}
+              {visibleCols.has('product_type')  && <th style={{ width: '140px' }}>Product Type</th>}
+              {visibleCols.has('quantity')      && <th style={{ width: '65px' }}>Qty</th>}
+              {visibleCols.has('age')           && <th style={{ width: '55px' }}>Age</th>}
+              {visibleCols.has('status')        && <th style={{ width: '140px' }}>Status</th>}
+              {visibleCols.has('remark')        && <th>Remark</th>}
+              <th style={{ width: '80px' }} className="no-print">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="11" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>Loading orders...</td></tr>
+              <tr><td colSpan="20" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>Loading orders...</td></tr>
             ) : orders.length === 0 ? (
-              <tr><td colSpan="11" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>No orders found matching filters.</td></tr>
+              <tr><td colSpan="20" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>No orders found matching filters.</td></tr>
             ) : (
               orders.map((order, index) => {
-                const poVal = getDisplayValue(order, 'po_number');
-                const dateVal = getDisplayValue(order, 'date_of_entry');
-                const qtyVal = getDisplayValue(order, 'quantity');
-                const remarkVal = getDisplayValue(order, 'remark');
+                const isSelected  = selectedIds.has(order.id);
+                const poVal       = getDisplayValue(order, 'po_number');
+                const dateVal     = getDisplayValue(order, 'date_of_entry');
+                const qtyVal      = getDisplayValue(order, 'quantity');
+                const remarkVal   = getDisplayValue(order, 'remark');
                 const clientValId = getDisplayValue(order, 'client_id');
-                const pNameValId = getDisplayValue(order, 'product_name_id');
-                const pTypeValId = getDisplayValue(order, 'product_type_id');
-                const statusVal = getDisplayValue(order, 'status');
+                const pNameValId  = getDisplayValue(order, 'product_name_id');
+                const pTypeValId  = getDisplayValue(order, 'product_type_id');
+                const statusVal   = getDisplayValue(order, 'status');
 
                 return (
-                  <tr key={order.id}>
+                  <tr key={order.id} style={{ backgroundColor: isSelected ? 'var(--table-row-selected)' : undefined }}>
+                    <td className="no-print">
+                      <input type="checkbox" checked={isSelected} onChange={e => handleCheckbox(e, order.id, index)} onClick={e => e.stopPropagation()} />
+                    </td>
                     <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * limit + index + 1}</td>
-                    <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString()}
-                    </td>
-                    <td className={pendingEdits[order.id]?.po_number !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={poVal || ''} onChange={e => handleCellChange(order.id, 'po_number', e.target.value)} /> : <span style={{ fontWeight: 600 }}>{poVal}</span>}
-                    </td>
-                    <td className={pendingEdits[order.id]?.client_id !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <Select options={clients} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={clients.find(c => c.value === clientValId)} onChange={val => handleCellChange(order.id, 'client_id', val ? val.value : null)} /> : order.clients?.name}
-                    </td>
-                    <td className={pendingEdits[order.id]?.product_name_id !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <Select options={productNames} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productNames.find(c => c.value === pNameValId)} onChange={val => handleCellChange(order.id, 'product_name_id', val ? val.value : null)} /> : order.product_names?.name}
-                    </td>
-                    <td className={pendingEdits[order.id]?.product_type_id !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <Select options={productTypes} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productTypes.find(c => c.value === pTypeValId)} onChange={val => handleCellChange(order.id, 'product_type_id', val ? val.value : null)} /> : order.product_types?.name}
-                    </td>
-                    <td className={pendingEdits[order.id]?.quantity !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <input type="number" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '60px' }} value={qtyVal || ''} onChange={e => handleCellChange(order.id, 'quantity', e.target.value)} /> : qtyVal}
-                    </td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{calcDaysOld(dateVal)}d</td>
-                    <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <Select options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal)} onChange={val => handleCellChange(order.id, 'status', val ? val.value : null)} /> : <span className={`status-badge status-${statusVal.replace(/\s+/g, '-').toLowerCase()}`}>{statusVal}</span>}
-                    </td>
-                    <td className={pendingEdits[order.id]?.remark !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={remarkVal || ''} onChange={e => handleCellChange(order.id, 'remark', e.target.value)} /> : remarkVal}
-                    </td>
-                    <td>
+
+                    {visibleCols.has('date_of_entry') && (
+                      <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString()}
+                      </td>
+                    )}
+                    {visibleCols.has('po_number') && (
+                      <td className={pendingEdits[order.id]?.po_number !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={poVal || ''} onChange={e => handleCellChange(order.id, 'po_number', e.target.value)} /> : <span style={{ fontWeight: 600 }}>{poVal}</span>}
+                      </td>
+                    )}
+                    {visibleCols.has('client') && (
+                      <td className={pendingEdits[order.id]?.client_id !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <Select instanceId={`cclient-${order.id}`} options={clients} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={clients.find(c => c.value === clientValId)} onChange={val => handleCellChange(order.id, 'client_id', val?.value ?? null)} /> : order.clients?.name}
+                      </td>
+                    )}
+                    {visibleCols.has('product_name') && (
+                      <td className={pendingEdits[order.id]?.product_name_id !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <Select instanceId={`cpname-${order.id}`} options={productNames} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productNames.find(c => c.value === pNameValId)} onChange={val => handleCellChange(order.id, 'product_name_id', val?.value ?? null)} /> : order.product_names?.name}
+                      </td>
+                    )}
+                    {visibleCols.has('product_type') && (
+                      <td className={pendingEdits[order.id]?.product_type_id !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <Select instanceId={`cptype-${order.id}`} options={productTypes} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productTypes.find(c => c.value === pTypeValId)} onChange={val => handleCellChange(order.id, 'product_type_id', val?.value ?? null)} /> : order.product_types?.name}
+                      </td>
+                    )}
+                    {visibleCols.has('quantity') && (
+                      <td className={pendingEdits[order.id]?.quantity !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <input type="number" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '60px' }} value={qtyVal || ''} onChange={e => handleCellChange(order.id, 'quantity', e.target.value)} /> : qtyVal}
+                      </td>
+                    )}
+                    {visibleCols.has('age') && <td style={{ color: 'var(--text-secondary)' }}>{calcDaysOld(dateVal)}d</td>}
+                    {visibleCols.has('status') && (
+                      <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <Select instanceId={`cstatus-${order.id}`} options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal)} onChange={val => handleCellChange(order.id, 'status', val?.value ?? null)} /> : <span className={`status-badge status-${statusVal.replace(/\s+/g, '-').toLowerCase()}`}>{statusVal}</span>}
+                      </td>
+                    )}
+                    {visibleCols.has('remark') && (
+                      <td className={pendingEdits[order.id]?.remark !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={remarkVal || ''} onChange={e => handleCellChange(order.id, 'remark', e.target.value)} /> : remarkVal}
+                      </td>
+                    )}
+                    <td className="no-print">
                       <button className="btn btn-ghost btn-sm" onClick={() => promptDelete(order.id, order.po_number)} disabled={isEditable && hasPendingEdits()}>Delete</button>
                     </td>
                   </tr>
@@ -381,14 +526,11 @@ export default function CompletedOrdersPage() {
         </table>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ fontSize: '14px' }}>Rows per page:</span>
           <select className="form-input" style={{ padding: '4px 8px', fontSize: '13px', width: 'auto' }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={200}>200</option>
+            <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={200}>200</option>
           </select>
         </div>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -401,21 +543,36 @@ export default function CompletedOrdersPage() {
       </div>
 
       {hasPendingEdits() && (
-        <div className="floating-save">
+        <div className="floating-save no-print">
           <button className="btn btn-secondary" onClick={discardEdits} disabled={saving}>Discard</button>
           <button className="btn btn-primary" onClick={saveAllEdits} disabled={saving}>{saving ? 'Saving...' : `Save Changes (${Object.keys(pendingEdits).length} edits)`}</button>
         </div>
       )}
 
+      {selectedCount > 0 && !hasPendingEdits() && (
+        <div className="floating-save no-print" style={{ gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '14px', fontWeight: 600 }}>{selectedCount} selected</span>
+          <div style={{ width: '200px' }}>
+            <Select instanceId="bulk-status-completed" options={STATUS_OPTIONS} placeholder="Set Status..." styles={tblSelectStyles} value={bulkStatus} onChange={setBulkStatus} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} menuPlacement="top" />
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={handleBulkStatusUpdate} disabled={!bulkStatus || saving}>{saving ? 'Updating...' : 'Apply Status'}</button>
+          <button className="btn btn-secondary btn-sm" onClick={exportCSV}>Export CSV</button>
+          <button className="btn btn-secondary btn-sm" onClick={exportPDF}>Export PDF</button>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => setBulkDelConfirm(true)} disabled={saving}>Delete Selected</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setLastCheckedIndex(null); }}>Clear</button>
+        </div>
+      )}
+
       <ConfirmModal isOpen={confirmModal.isOpen} title="Delete Order" message={`Are you sure you want to delete PO #${confirmModal.po}? It will be moved to the recycle bin.`} confirmText="Delete" confirmColor="danger" onConfirm={handleDelete} onCancel={() => setConfirmModal({ isOpen: false, id: null, po: '' })} />
+      <ConfirmModal isOpen={bulkDelConfirm} title="Delete Selected Orders" message={`Are you sure you want to delete ${selectedCount} selected orders? They will all be moved to the Recycle Bin.`} confirmText="Delete All" confirmColor="danger" onConfirm={handleBulkDelete} onCancel={() => setBulkDelConfirm(false)} />
       <AlertModal isOpen={alertInfo.isOpen} title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })} />
-      
+
       {viewPrompt.isOpen && (
         <div className="modal-overlay" style={{ zIndex: 99999 }}>
           <div className="modal-content" style={{ maxWidth: '400px' }}>
             <h3 className="modal-title" style={{ marginTop: 0, fontSize: '18px', fontWeight: '600' }}>Save Quick View</h3>
             <p style={{ margin: '12px 0', fontSize: '14px', color: 'var(--text-secondary)' }}>Enter a name to save these filter rules for everyone.</p>
-            <input type="text" className="form-input" placeholder="e.g. Reliance Pending Orders" value={viewPrompt.viewName} onChange={e => setViewPrompt({ ...viewPrompt, viewName: e.target.value })} autoFocus style={{ marginBottom: '16px', width: '100%' }} />
+            <input type="text" className="form-input" placeholder="e.g. Old Completed" value={viewPrompt.viewName} onChange={e => setViewPrompt({ ...viewPrompt, viewName: e.target.value })} autoFocus style={{ marginBottom: '16px', width: '100%' }} />
             <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button className="btn btn-secondary" onClick={() => setViewPrompt({ isOpen: false, viewName: '' })}>Cancel</button>
               <button className="btn btn-primary" onClick={saveQuickView} disabled={!viewPrompt.viewName.trim()}>Save View</button>

@@ -24,6 +24,12 @@ export default function RecycleBin() {
   const [confirm, setConfirm] = useState({ isOpen: false, action: null, id: null, title: '', message: '', btnText: '', color: 'danger' });
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
 
+  // Bulk Selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [lastCheckedIndex, setLastCheckedIndex] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const selectedCount = selectedIds.size;
+
   function showAlert(title, message) {
     setAlertInfo({ isOpen: true, title, message });
   }
@@ -52,6 +58,8 @@ export default function RecycleBin() {
   }, []);
 
   useEffect(() => {
+    setSelectedIds(new Set());
+    setLastCheckedIndex(null);
     fetchDeletedRecords(activeTab, true);
 
     const supabase = createBrowserClient();
@@ -137,6 +145,64 @@ export default function RecycleBin() {
       } catch (err) {
         showAlert('Error', err.message);
       }
+    } else if (action === 'bulk-restore') {
+      await handleBulkAction('restore');
+    } else if (action === 'bulk-delete') {
+      await handleBulkAction('delete');
+    }
+  }
+
+  function toggleSelection(e, id, index) {
+    const isChecked = e.target.checked;
+    const newSelected = new Set(selectedIds);
+
+    if (e.nativeEvent.shiftKey && lastCheckedIndex !== null) {
+      const start = Math.min(index, lastCheckedIndex);
+      const end = Math.max(index, lastCheckedIndex);
+      for (let i = start; i <= end; i++) {
+        if (isChecked) newSelected.add(records[i].id);
+        else newSelected.delete(records[i].id);
+      }
+    } else {
+      if (isChecked) newSelected.add(id);
+      else newSelected.delete(id);
+    }
+    setSelectedIds(newSelected);
+    setLastCheckedIndex(index);
+  }
+
+  function toggleAll(e) {
+    if (e.target.checked) {
+      setSelectedIds(new Set(records.map(r => r.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+    setLastCheckedIndex(null);
+  }
+
+  async function handleBulkAction(action) {
+    if (selectedCount === 0) return;
+    setConfirm({ ...confirm, isOpen: false });
+    setSaving(true);
+    
+    try {
+      const res = await fetch(`/api/trash/${activeTab}/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids: Array.from(selectedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed to ${action} selected records`);
+
+      if (data.warning) showAlert('Partial Success', data.warning);
+      
+      await fetchDeletedRecords(activeTab, false);
+      setSelectedIds(new Set());
+      setLastCheckedIndex(null);
+    } catch (err) {
+      showAlert('Error', err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -156,6 +222,9 @@ export default function RecycleBin() {
     if (activeTab === 'deleted_orders') {
       return (
         <tr>
+          <th style={{ width: '40px' }}>
+            <input type="checkbox" onChange={toggleAll} checked={records.length > 0 && selectedIds.size === records.length} />
+          </th>
           <th style={{ width: '40px' }}>Sr.</th>
           <th style={{ width: '90px' }}>DDE</th>
           <th style={{ width: '100px' }}>PO Number</th>
@@ -173,6 +242,9 @@ export default function RecycleBin() {
     }
     return (
       <tr>
+        <th style={{ width: '40px' }}>
+          <input type="checkbox" onChange={toggleAll} checked={records.length > 0 && selectedIds.size === records.length} />
+        </th>
         <th style={{ width: '5%' }}>Sr. No.</th>
         <th style={{ width: '35%' }}>Record Data</th>
         <th style={{ width: '25%' }}>Date Deleted</th>
@@ -183,7 +255,7 @@ export default function RecycleBin() {
   }
 
   function renderTableContent() {
-    const colCount = activeTab === 'deleted_orders' ? 12 : 5;
+    const colCount = activeTab === 'deleted_orders' ? 13 : 6;
 
     if (loading) {
       return (
@@ -206,7 +278,10 @@ export default function RecycleBin() {
     }
 
     return records.map((record, index) => (
-      <tr key={record.id}>
+      <tr key={record.id} className={selectedIds.has(record.id) ? 'row-selected' : ''}>
+        <td className="checkbox-col">
+          <input type="checkbox" checked={selectedIds.has(record.id)} onChange={(e) => toggleSelection(e, record.id, index)} />
+        </td>
         <td style={{ color: 'var(--text-secondary)' }}>{index + 1}</td>
         
         {activeTab === 'deleted_orders' ? (
@@ -308,6 +383,31 @@ export default function RecycleBin() {
         message={alertInfo.message}
         onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })}
       />
+      
+      {/* Floating Bulk Action Bar */}
+      {selectedCount > 0 && (
+        <div className="floating-save no-print" style={{ gap: '12px', flexWrap: 'wrap' }}>
+          {selectedCount > 200 ? (
+            <span style={{ color: 'var(--status-red-text)', fontSize: '14px', fontWeight: 600 }}>Maximum 200 allowed ({selectedCount} selected). Please deselect some.</span>
+          ) : (
+            <span style={{ fontSize: '14px', fontWeight: 600 }}>{selectedCount} selected</span>
+          )}
+          
+          <button className="btn btn-primary btn-sm" onClick={() => setConfirm({
+            isOpen: true, action: 'bulk-restore', title: 'Restore Selected',
+            message: `Restore ${selectedCount} records back to active?`,
+            btnText: 'Restore All', color: 'primary'
+          })} disabled={saving || selectedCount > 200}>Restore Selected</button>
+          
+          <button className="btn btn-danger btn-sm" onClick={() => setConfirm({
+            isOpen: true, action: 'bulk-delete', title: 'Permanent Delete Selected',
+            message: `WARNING: Permanently delete ${selectedCount} records forever?`,
+            btnText: 'Delete Forever', color: 'danger'
+          })} disabled={saving || selectedCount > 200}>Delete Selected</button>
+          
+          <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setLastCheckedIndex(null); }}>Clear</button>
+        </div>
+      )}
     </div>
   );
 }
