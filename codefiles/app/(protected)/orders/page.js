@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Select from 'react-select';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
@@ -38,7 +39,16 @@ const ALL_COLUMNS = [
   { key: 'remark',        label: 'Remark' },
 ];
 
-export default function ActiveOrdersPage() {
+export default function ActiveOrdersPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ActiveOrdersPage />
+    </Suspense>
+  );
+}
+
+function ActiveOrdersPage() {
+  const searchParams = useSearchParams();
   const { settings, loading: settingsLoading } = useGlobalSettings();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +69,14 @@ export default function ActiveOrdersPage() {
   const [filters, setFilters] = useState([]);
   const [quickViews, setQuickViews] = useState([]);
   const [activeQuickView, setActiveQuickView] = useState({ value: 'custom', label: 'Custom View' });
+
+  // Parse Initial Filters from URL
+  useEffect(() => {
+    const statusParam = searchParams.get('filter_status');
+    if (statusParam) {
+      setFilters([{ column: 'status', operator: 'eq', value: statusParam }]);
+    }
+  }, [searchParams]);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -92,7 +110,17 @@ export default function ActiveOrdersPage() {
 
   function showAlert(title, message) { setAlertInfo({ isOpen: true, title, message }); }
 
-  const STATUS_OPTIONS = settings?.status_options?.map(s => ({ value: s, label: s })) || [];
+  // Fallback map in case something breaks
+  const STATUS_OPTIONS = settings?.status_options?.map(s => {
+    const name = typeof s === 'string' ? s : s.name;
+    return { value: name, label: name };
+  }) || [];
+
+  function getStatusStyle(statusName) {
+    const opt = settings?.status_options?.find(s => (typeof s === 'string' ? s : s.name) === statusName);
+    if (!opt || typeof opt === 'string') return { backgroundColor: '#f3f4f6', color: '#4b5563' };
+    return { backgroundColor: opt.bg || '#f3f4f6', color: opt.text || '#4b5563' };
+  }
 
   // Close column menu on outside click
   useEffect(() => {
@@ -509,22 +537,22 @@ export default function ActiveOrdersPage() {
 
       {/* Table */}
       <div className="table-container" style={{ overflowX: 'auto' }}>
-        <table className="data-table" style={{ minWidth: '900px' }}>
+        <table className="data-table" style={{ minWidth: isEditable ? '1150px' : '900px' }}>
           <thead>
             <tr>
               <th style={{ width: '40px' }} className="no-print">
                 <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
               </th>
               <th style={{ width: '40px' }}>Sr.</th>
-              {visibleCols.has('date_of_entry')   && <th style={{ width: '110px' }}>Date</th>}
-              {visibleCols.has('po_number')        && <th style={{ width: '100px' }}>PO Number</th>}
-              {visibleCols.has('client')           && <th style={{ width: '170px' }}>Client</th>}
-              {visibleCols.has('product_name')     && <th style={{ width: '150px' }}>Product Name</th>}
-              {visibleCols.has('product_type')     && <th style={{ width: '140px' }}>Product Type</th>}
-              {visibleCols.has('quantity')         && <th style={{ width: '65px' }}>Qty</th>}
+              {visibleCols.has('date_of_entry')   && <th style={{ width: '135px' }}>Date</th>}
+              {visibleCols.has('po_number')        && <th style={{ width: '110px' }}>PO Number</th>}
+              {visibleCols.has('client')           && <th style={{ width: '200px' }}>Client</th>}
+              {visibleCols.has('product_name')     && <th style={{ width: '180px' }}>Product Name</th>}
+              {visibleCols.has('product_type')     && <th style={{ width: '150px' }}>Product Type</th>}
+              {visibleCols.has('quantity')         && <th style={{ width: '90px' }}>Qty</th>}
               {visibleCols.has('age')              && <th style={{ width: '55px' }}>Age</th>}
-              {visibleCols.has('status')           && <th style={{ width: '140px' }}>Status</th>}
-              {visibleCols.has('remark')           && <th>Remark</th>}
+              {visibleCols.has('status')           && <th style={{ width: '160px' }}>Status</th>}
+              {visibleCols.has('remark')           && <th style={{ minWidth: '150px' }}>Remark</th>}
               <th style={{ width: '80px' }} className="no-print">Actions</th>
             </tr>
           </thead>
@@ -592,8 +620,8 @@ export default function ActiveOrdersPage() {
                     )}
                     {visibleCols.has('status') && (
                       <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <Select instanceId={`status-${order.id}`} options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal)} onChange={val => handleCellChange(order.id, 'status', val?.value ?? null)} /> : <span className={`status-badge status-${statusVal.replace(/\s+/g, '-').toLowerCase()}`}>{statusVal}</span>}
-                      </td>
+                      {isEditable ? <Select options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal)} onChange={val => handleCellChange(order.id, 'status', val ? val.value : null)} /> : <span className="status-badge" style={getStatusStyle(statusVal)}>{statusVal}</span>}
+                    </td>
                     )}
                     {visibleCols.has('remark') && (
                       <td className={pendingEdits[order.id]?.remark !== undefined ? 'cell-edited' : ''}>

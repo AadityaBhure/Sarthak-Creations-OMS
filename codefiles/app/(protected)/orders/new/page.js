@@ -18,7 +18,10 @@ export default function NewOrderPage() {
   }
 
   const { settings, loading: settingsLoading } = useGlobalSettings();
-  const STATUS_OPTIONS = settings?.status_options?.map(s => ({ value: s, label: s })) || [];
+  const STATUS_OPTIONS = settings?.status_options?.map(s => {
+    const name = typeof s === 'string' ? s : s.name;
+    return { value: name, label: name };
+  }) || [];
 
   // Master Data Options
   const [clients, setClients] = useState([]);

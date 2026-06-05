@@ -616,12 +616,6 @@ input, select, textarea {
   letter-spacing: 0.5px;
 }
 
-.status-design-confirmed { background-color: #f3f4f6; color: #4b5563; }
-.status-client-approval { background-color: #fef3c7; color: #b45309; }
-.status-finalised { background-color: #dbeafe; color: #1e40af; }
-.status-printing { background-color: #ede9fe; color: #5b21b6; }
-.status-completed { background-color: #d1fae5; color: #065f46; }
-
 
 /* =============================================================================
    TOOLBAR

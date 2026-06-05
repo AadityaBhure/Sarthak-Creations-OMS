@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import AlertModal from '@/components/ui/AlertModal';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -13,6 +14,8 @@ export default function SettingsPage() {
 
   // Extreme Warning Modal for Status Deletion
   const [authModal, setAuthModal] = useState({ isOpen: false, statusToDelete: null, password: '', statusName: '', agreement: '', verifying: false });
+  const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+  const [addPrompt, setAddPrompt] = useState({ isOpen: false, value: '' });
 
   useEffect(() => {
     // Load global settings from API
@@ -41,7 +44,7 @@ export default function SettingsPage() {
         body: JSON.stringify(newSettings)
       });
     } catch (e) {
-      alert("Failed to save settings: " + e.message);
+      setAlertInfo({ isOpen: true, title: 'Error', message: 'Failed to save settings: ' + e.message });
     }
     setSaving(false);
   }
@@ -60,15 +63,37 @@ export default function SettingsPage() {
   }
 
   // --- Handlers for Status Array ---
-  function addStatus() {
-    const name = prompt("Enter new status name:");
-    if (!name || name.trim() === '') return;
-    if (settings.status_options.includes(name.trim())) {
-      alert("Status already exists.");
+  function handleAddStatusClick() {
+    setAddPrompt({ isOpen: true, value: '' });
+  }
+
+  function confirmAddStatus() {
+    const name = addPrompt.value;
+    if (!name || name.trim() === '') {
+      setAddPrompt({ isOpen: false, value: '' });
       return;
     }
-    const nextArr = [...settings.status_options, name.trim()];
+    const exists = settings.status_options.find(s => (typeof s === 'string' ? s : s.name) === name.trim());
+    if (exists) {
+      setAlertInfo({ isOpen: true, title: 'Error', message: 'Status already exists.' });
+      return;
+    }
+    const nextArr = [...settings.status_options, { name: name.trim(), bg: '#f3f4f6', text: '#4b5563' }];
     saveGlobalSettings({ ...settings, status_options: nextArr });
+    setAddPrompt({ isOpen: false, value: '' });
+  }
+
+  function handleColorChange(idx, field, val) {
+    const nextArr = [...settings.status_options];
+    const current = nextArr[idx];
+    nextArr[idx] = typeof current === 'string' 
+      ? { name: current, bg: '#f3f4f6', text: '#4b5563', [field]: val } 
+      : { ...current, [field]: val };
+    setSettings({ ...settings, status_options: nextArr });
+  }
+
+  function saveColors() {
+    saveGlobalSettings(settings);
   }
 
   function promptDeleteStatus(statusName) {
@@ -90,32 +115,32 @@ export default function SettingsPage() {
       const authData = await res.json();
       
       if (!res.ok || !authData.success) {
-        alert("Incorrect login password.");
+        setAlertInfo({ isOpen: true, title: 'Error', message: 'Incorrect login password.' });
         setAuthModal(prev => ({ ...prev, verifying: false }));
         return;
       }
 
       // 2. Exact string match check
       if (statusName !== statusToDelete) {
-        alert("Status name does not match.");
+        setAlertInfo({ isOpen: true, title: 'Error', message: 'Status name does not match.' });
         setAuthModal(prev => ({ ...prev, verifying: false }));
         return;
       }
 
       // 3. Agreement string check
       if (agreement !== "I understand deleteing this while there may be active orders can break the software") {
-        alert("Agreement text does not match exactly.");
+        setAlertInfo({ isOpen: true, title: 'Error', message: 'Agreement text does not match exactly.' });
         setAuthModal(prev => ({ ...prev, verifying: false }));
         return;
       }
 
       // Passed!
-      const nextArr = settings.status_options.filter(s => s !== statusToDelete);
+      const nextArr = settings.status_options.filter(s => (typeof s === 'string' ? s : s.name) !== statusToDelete);
       saveGlobalSettings({ ...settings, status_options: nextArr });
       setAuthModal({ isOpen: false, statusToDelete: null, password: '', statusName: '', agreement: '', verifying: false });
 
     } catch (e) {
-      alert("Failed to verify credentials: " + e.message);
+      setAlertInfo({ isOpen: true, title: 'Error', message: 'Failed to verify credentials: ' + e.message });
       setAuthModal(prev => ({ ...prev, verifying: false }));
     }
   }
@@ -222,15 +247,31 @@ export default function SettingsPage() {
             These are the status options actively being used in the system lifecycle. Be extremely careful when deleting a status, as it may break historical orders that rely on it.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxWidth: '500px' }}>
-            {settings?.status_options?.map((s, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-page)', padding: '10px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                <span style={{ fontWeight: '500', fontSize: '14px' }}>{s}</span>
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => promptDeleteStatus(s)}>Remove</button>
-              </div>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxWidth: '600px' }}>
+            {settings?.status_options?.map((s, idx) => {
+              const sName = typeof s === 'string' ? s : s.name;
+              const sBg = typeof s === 'string' ? '#f3f4f6' : (s.bg || '#f3f4f6');
+              const sText = typeof s === 'string' ? '#4b5563' : (s.text || '#4b5563');
+
+              return (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-page)', padding: '10px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <span style={{ fontWeight: '600', fontSize: '13px', padding: '4px 8px', borderRadius: '4px', backgroundColor: sBg, color: sText, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{sName}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                        Bg: <input type="color" value={sBg} onChange={e => handleColorChange(idx, 'bg', e.target.value)} onBlur={saveColors} style={{ width: '24px', height: '24px', padding: '0', border: 'none', borderRadius: '4px', cursor: 'pointer' }} />
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                        Text: <input type="color" value={sText} onChange={e => handleColorChange(idx, 'text', e.target.value)} onBlur={saveColors} style={{ width: '24px', height: '24px', padding: '0', border: 'none', borderRadius: '4px', cursor: 'pointer' }} />
+                      </label>
+                    </div>
+                  </div>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => promptDeleteStatus(sName)}>Remove</button>
+                </div>
+              );
+            })}
           </div>
-          <button className="btn btn-secondary" onClick={addStatus}>+ Add New Status</button>
+          <button className="btn btn-secondary" onClick={handleAddStatusClick}>+ Add New Status</button>
         </div>
 
         {/* ======================= SECTION 4: PERSONALIZATION ======================= */}
@@ -331,6 +372,21 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <AlertModal isOpen={alertInfo.isOpen} title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })} />
+
+      {addPrompt.isOpen && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <h3 className="modal-title" style={{ marginTop: 0, fontSize: '18px', fontWeight: '600' }}>Add New Status</h3>
+            <p style={{ margin: '12px 0', fontSize: '14px', color: 'var(--text-secondary)' }}>Enter the new status name.</p>
+            <input type="text" className="form-input" placeholder="e.g. In Transit" value={addPrompt.value} onChange={e => setAddPrompt({ ...addPrompt, value: e.target.value })} autoFocus style={{ marginBottom: '16px', width: '100%', padding: '8px' }} />
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button className="btn btn-secondary" onClick={() => setAddPrompt({ isOpen: false, value: '' })}>Cancel</button>
+              <button className="btn btn-primary" onClick={confirmAddStatus} disabled={!addPrompt.value.trim()}>Add Status</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
