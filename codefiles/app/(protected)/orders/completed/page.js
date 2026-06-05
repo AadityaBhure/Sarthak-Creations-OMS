@@ -64,6 +64,7 @@ export default function CompletedOrdersPage() {
   }, [settingsLoading, settings]);
   const [totalRowCount, setTotalRowCount] = useState(0);
   const [filters, setFilters] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ column: 'created_at', direction: 'desc' });
   const [quickViews, setQuickViews] = useState([]);
   const [activeQuickView, setActiveQuickView] = useState({ value: 'custom', label: 'Custom View' });
 
@@ -135,14 +136,21 @@ export default function CompletedOrdersPage() {
     } catch (err) { console.error(err); }
   }
 
-  useEffect(() => { fetchOrders(true); }, [page, limit, filters]);
+  useEffect(() => { fetchOrders(true); }, [page, limit, filters, sortConfig]);
+
+  const fetchAbortCtrl = useRef(null);
 
   async function fetchOrders(showLoader = true) {
+    if (fetchAbortCtrl.current) fetchAbortCtrl.current.abort();
+    fetchAbortCtrl.current = new AbortController();
+    const signal = fetchAbortCtrl.current.signal;
+
     if (showLoader) setLoading(true);
     try {
       const res = await fetch('/api/orders/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ page, limit, filters, statusContext: 'completed' })
+        body: JSON.stringify({ page, limit, filters, sort: sortConfig, statusContext: 'completed' }),
+        signal
       });
       if (!res.ok) throw new Error('Failed to fetch orders');
       const data = await res.json();
@@ -151,8 +159,22 @@ export default function CompletedOrdersPage() {
       setPendingUpdates(0);
       setSelectedIds(new Set());
       setLastCheckedIndex(null);
-    } catch (err) { setError(err.message); } finally { if (showLoader) setLoading(false); }
+    } catch (err) { 
+      if (err.name !== 'AbortError') setError(err.message); 
+    } finally { 
+      if (showLoader) setLoading(false); 
+    }
   }
+
+  // Parse Initial Filters from URL
+  useEffect(() => {
+    const statusParam = searchParams.get('filter_status');
+    if (statusParam) {
+      setFilters([{ column: 'status', operator: 'eq', value: statusParam, logic: 'and' }]);
+    } else {
+      setFilters([]);
+    }
+  }, [searchParams]);
 
   function handleCheckbox(e, orderId, index) {
     const newSelected = new Set(selectedIds);
@@ -382,6 +404,26 @@ export default function CompletedOrdersPage() {
     dropdownIndicator: base => ({ ...base, padding: '2px 8px' })
   };
 
+  function handleSort(column) {
+    setSortConfig(prev => {
+      if (prev.column === column) {
+        return { column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { column, direction: 'asc' };
+    });
+  }
+
+  function SortHeader({ column, label, width }) {
+    const isSorted = sortConfig.column === column;
+    const arrow = isSorted ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ' ↕';
+    return (
+      <th style={{ width, cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort(column)}>
+        {label}
+        <span style={{ fontSize: '10px', color: isSorted ? 'var(--primary-color)' : 'var(--text-muted)' }}>{arrow}</span>
+      </th>
+    );
+  }
+
   const selectedCount = selectedIds.size;
 
   return (
@@ -477,15 +519,15 @@ export default function CompletedOrdersPage() {
                 <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
               </th>
               <th style={{ width: '40px' }}>Sr.</th>
-              {visibleCols.has('date_of_entry') && <th style={{ width: '135px' }}>Date</th>}
-              {visibleCols.has('po_number')     && <th style={{ width: '110px' }}>PO Number</th>}
-              {visibleCols.has('client')        && <th style={{ width: '200px' }}>Client</th>}
-              {visibleCols.has('product_name')  && <th style={{ width: '180px' }}>Product Name</th>}
-              {visibleCols.has('product_type')  && <th style={{ width: '150px' }}>Product Type</th>}
-              {visibleCols.has('quantity')      && <th style={{ width: '90px' }}>Qty</th>}
-              {visibleCols.has('age')           && <th style={{ width: '55px' }}>Age</th>}
-              {visibleCols.has('status')        && <th style={{ width: '160px' }}>Status</th>}
-              {visibleCols.has('remark')        && <th style={{ minWidth: '150px' }}>Remark</th>}
+              {visibleCols.has('date_of_entry')   && <SortHeader column="date_of_entry" label="Date" width="135px" />}
+              {visibleCols.has('po_number')        && <SortHeader column="po_number" label="PO Number" width="110px" />}
+              {visibleCols.has('client')           && <SortHeader column="clients.name" label="Client" width="200px" />}
+              {visibleCols.has('product_name')     && <SortHeader column="product_names.name" label="Product Name" width="180px" />}
+              {visibleCols.has('product_type')     && <SortHeader column="product_types.name" label="Product Type" width="150px" />}
+              {visibleCols.has('quantity')         && <SortHeader column="quantity" label="Qty" width="90px" />}
+              {visibleCols.has('age')              && <SortHeader column="date_of_entry" label="Age" width="55px" />}
+              {visibleCols.has('status')           && <SortHeader column="status" label="Status" width="160px" />}
+              {visibleCols.has('remark')           && <SortHeader column="remark" label="Remark" width="150px" />}
               <th style={{ width: '80px' }} className="no-print">Actions</th>
             </tr>
           </thead>

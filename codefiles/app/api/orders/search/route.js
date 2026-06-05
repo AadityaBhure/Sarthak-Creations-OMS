@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabaseClient';
 
 export async function POST(request) {
   try {
-    const { page = 1, limit = 50, filters = [], statusContext } = await request.json();
+    const { page = 1, limit = 50, filters = [], sort = { column: 'created_at', direction: 'desc' }, statusContext } = await request.json();
 
     const supabase = createServerClient();
     
@@ -14,8 +14,7 @@ export async function POST(request) {
         clients (id, name),
         product_names (id, name),
         product_types (id, name)
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' });
 
     // Apply base context (Active vs Completed)
     if (statusContext === 'completed') {
@@ -77,6 +76,18 @@ export async function POST(request) {
           query = query.or(orGroups.join(','));
         }
       }
+    }
+
+    // Apply sorting
+    if (sort && sort.column) {
+      let orderStr = sort.column;
+      if (orderStr.includes('.')) {
+        const [table, col] = orderStr.split('.');
+        orderStr = `${table}(${col})`;
+      }
+      query = query.order(orderStr, { ascending: sort.direction === 'asc' });
+    } else {
+      query = query.order('created_at', { ascending: false });
     }
 
     // Apply pagination
