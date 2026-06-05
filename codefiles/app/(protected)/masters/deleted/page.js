@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
+import { useGlobalSettings } from '@/components/SettingsProvider';
 
 const TABS = [
   { id: 'deleted_clients', label: 'Clients' },
@@ -23,6 +24,9 @@ export default function RecycleBin() {
 
   const [confirm, setConfirm] = useState({ isOpen: false, action: null, id: null, title: '', message: '', btnText: '', color: 'danger' });
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
+
+  const { settings } = useGlobalSettings();
+  const BULK_LIMIT = 200;
 
   // Bulk Selection
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -182,6 +186,10 @@ export default function RecycleBin() {
 
   async function handleBulkAction(action) {
     if (selectedCount === 0) return;
+    if (selectedCount > BULK_LIMIT) {
+      showAlert('Limit Exceeded', `You can only bulk ${action} up to ${BULK_LIMIT} records at a time for performance reasons. You have selected ${selectedCount}.`);
+      return;
+    }
     setConfirm({ ...confirm, isOpen: false });
     setSaving(true);
     
@@ -208,12 +216,13 @@ export default function RecycleBin() {
 
   function getDaysLeft(deletedAt) {
     const deletedDate = new Date(deletedAt);
-    const purgeDate = new Date(deletedDate.getTime() + 10 * 24 * 60 * 60 * 1000);
+    const retentionDays = settings?.recycle_retention_days || 10;
+    const purgeDate = new Date(deletedDate.getTime() + retentionDays * 24 * 60 * 60 * 1000);
     const today = new Date();
     const diffTime = purgeDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) return 'Purging today';
+    if (diffDays <= 0) return 'Purging today';
     if (diffDays === 1) return '1 day left';
     return `${diffDays} days left`;
   }
@@ -393,18 +402,17 @@ export default function RecycleBin() {
             <span style={{ fontSize: '14px', fontWeight: 600 }}>{selectedCount} selected</span>
           )}
           
-          <button className="btn btn-primary btn-sm" onClick={() => setConfirm({
-            isOpen: true, action: 'bulk-restore', title: 'Restore Selected',
-            message: `Restore ${selectedCount} records back to active?`,
-            btnText: 'Restore All', color: 'primary'
-          })} disabled={saving || selectedCount > 200}>Restore Selected</button>
-          
-          <button className="btn btn-danger btn-sm" onClick={() => setConfirm({
-            isOpen: true, action: 'bulk-delete', title: 'Permanent Delete Selected',
-            message: `WARNING: Permanently delete ${selectedCount} records forever?`,
-            btnText: 'Delete Forever', color: 'danger'
-          })} disabled={saving || selectedCount > 200}>Delete Selected</button>
-          
+          {selectedCount > BULK_LIMIT && (
+            <span style={{ fontSize: '13px', color: 'var(--status-red-text)' }}>
+              (Bulk limit is {BULK_LIMIT}. Please unselect some.)
+            </span>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={() => setConfirm({ isOpen: true, action: 'bulk-restore', title: 'Bulk Restore', message: `Are you sure you want to restore ${selectedCount} selected records?`, btnText: 'Restore All', color: 'primary' })} disabled={saving || selectedCount > BULK_LIMIT}>
+            Restore Selected
+          </button>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => setConfirm({ isOpen: true, action: 'bulk-delete', title: 'Permanent Bulk Delete', message: `WARNING: This will permanently delete ${selectedCount} selected records forever. Are you sure?`, btnText: 'Delete All Forever', color: 'danger' })} disabled={saving || selectedCount > BULK_LIMIT}>
+            Delete Selected Forever
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds(new Set()); setLastCheckedIndex(null); }}>Clear</button>
         </div>
       )}

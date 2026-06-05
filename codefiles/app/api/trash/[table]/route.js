@@ -18,6 +18,29 @@ export async function GET(request, { params }) {
     }
 
     const supabase = createServerClient();
+
+    // --- AUTO-PURGE LOGIC ---
+    // Fetch global retention days
+    const { data: settingsData } = await supabase
+      .from('global_settings')
+      .select('recycle_retention_days')
+      .eq('id', 'default')
+      .single();
+    
+    const retentionDays = settingsData?.recycle_retention_days || 10;
+    
+    // Calculate cutoff date
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+    const cutoffIso = cutoffDate.toISOString();
+
+    // Perform hard delete on records older than cutoff date
+    await supabase
+      .from(table)
+      .delete()
+      .lt('deleted_at', cutoffIso);
+    // ------------------------
+
     const { data, error } = await supabase
       .from(table)
       .select('*')

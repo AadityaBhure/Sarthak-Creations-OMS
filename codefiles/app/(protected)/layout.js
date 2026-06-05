@@ -1,5 +1,10 @@
 import AppShell from '@/components/AppShell';
+import { SettingsProvider } from '@/components/SettingsProvider';
 
 export default function ProtectedLayout({ children }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <SettingsProvider>
+      <AppShell>{children}</AppShell>
+    </SettingsProvider>
+  );
 }

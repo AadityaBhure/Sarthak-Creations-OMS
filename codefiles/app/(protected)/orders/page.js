@@ -7,13 +7,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
 
-const STATUS_OPTIONS = [
-  'Design Confirmed',
-  'Client Approval',
-  'Finalised',
-  'Printing',
-  'Completed'
-].map(s => ({ value: s, label: s }));
+import { useGlobalSettings } from '@/components/SettingsProvider';
 
 const FILTER_COLUMNS = [
   { value: 'po_number', label: 'PO Number', type: 'text' },
@@ -45,6 +39,7 @@ const ALL_COLUMNS = [
 ];
 
 export default function ActiveOrdersPage() {
+  const { settings, loading: settingsLoading } = useGlobalSettings();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -56,6 +51,10 @@ export default function ActiveOrdersPage() {
   // Pagination & Filters
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+
+  useEffect(() => {
+    if (settings && !settingsLoading) setLimit(settings.default_pagination || 50);
+  }, [settingsLoading, settings]);
   const [totalRowCount, setTotalRowCount] = useState(0);
   const [filters, setFilters] = useState([]);
   const [quickViews, setQuickViews] = useState([]);
@@ -92,6 +91,8 @@ export default function ActiveOrdersPage() {
   const colMenuRef = useRef(null);
 
   function showAlert(title, message) { setAlertInfo({ isOpen: true, title, message }); }
+
+  const STATUS_OPTIONS = settings?.status_options?.map(s => ({ value: s, label: s })) || [];
 
   // Close column menu on outside click
   useEffect(() => {
@@ -256,12 +257,21 @@ export default function ActiveOrdersPage() {
     const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF({ orientation: 'landscape' });
     const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
-    doc.setFontSize(14);
-    doc.text('Sarthak Creations — Active Orders', 14, 15);
-    doc.setFontSize(9);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+    
+    const companyName = settings?.print_header_name || "Sarthak Creations";
+    const address = settings?.print_header_address || "";
+
+    doc.setFontSize(16);
+    doc.text(companyName, 14, 15);
+    
+    doc.setFontSize(10);
+    if (address) {
+      doc.text(address, 14, 22);
+    }
+    doc.text("Active Orders Report", 14, address ? 28 : 22);
+    
     autoTable(doc, {
-      startY: 28,
+      startY: address ? 35 : 30,
       head: [['Sr.', 'Date', 'PO Number', 'Client', 'Product Name', 'Product Type', 'Qty', 'Age', 'Status', 'Remark']],
       body: rows.map((o, i) => [
         i + 1,

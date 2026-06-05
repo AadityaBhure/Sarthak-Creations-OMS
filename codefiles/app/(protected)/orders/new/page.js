@@ -4,14 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Select from 'react-select';
 import AlertModal from '@/components/ui/AlertModal';
-
-const STATUS_OPTIONS = [
-  'Design Confirmed',
-  'Client Approval',
-  'Finalised',
-  'Printing',
-  'Completed'
-].map(s => ({ value: s, label: s }));
+import { useGlobalSettings } from '@/components/SettingsProvider';
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -23,6 +16,9 @@ export default function NewOrderPage() {
   function showAlert(title, message) {
     setAlertInfo({ isOpen: true, title, message });
   }
+
+  const { settings, loading: settingsLoading } = useGlobalSettings();
+  const STATUS_OPTIONS = settings?.status_options?.map(s => ({ value: s, label: s })) || [];
 
   // Master Data Options
   const [clients, setClients] = useState([]);
@@ -37,9 +33,15 @@ export default function NewOrderPage() {
     product_name_id: null,
     product_type_id: null,
     quantity: '',
-    status: STATUS_OPTIONS[0],
+    status: null,
     remark: ''
   });
+
+  useEffect(() => {
+    if (STATUS_OPTIONS.length > 0 && !formData.status) {
+      setFormData(prev => ({ ...prev, status: STATUS_OPTIONS[0] }));
+    }
+  }, [settingsLoading]);
 
   useEffect(() => {
     async function fetchMasters() {
@@ -161,7 +163,7 @@ export default function NewOrderPage() {
     })
   };
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return (
       <div className="masters-page">
         <p style={{ color: 'var(--text-muted)' }}>Loading form data...</p>

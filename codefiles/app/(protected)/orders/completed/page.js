@@ -5,10 +5,7 @@ import Select from 'react-select';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
-
-const STATUS_OPTIONS = [
-  'Design Confirmed', 'Client Approval', 'Finalised', 'Printing', 'Completed'
-].map(s => ({ value: s, label: s }));
+import { useGlobalSettings } from '@/components/SettingsProvider';
 
 const FILTER_COLUMNS = [
   { value: 'po_number',      label: 'PO Number',    type: 'text' },
@@ -42,6 +39,9 @@ export default function CompletedOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  const { settings, loading: settingsLoading } = useGlobalSettings();
+  const STATUS_OPTIONS = settings?.status_options?.map(s => ({ value: s, label: s })) || [];
 
   const [clients, setClients] = useState([]);
   const [productNames, setProductNames] = useState([]);
@@ -49,6 +49,10 @@ export default function CompletedOrdersPage() {
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  
+  useEffect(() => {
+    if (settings && !settingsLoading) setLimit(settings.default_pagination || 50);
+  }, [settingsLoading, settings]);
   const [totalRowCount, setTotalRowCount] = useState(0);
   const [filters, setFilters] = useState([]);
   const [quickViews, setQuickViews] = useState([]);
@@ -226,10 +230,18 @@ export default function CompletedOrdersPage() {
     const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF({ orientation: 'landscape' });
     const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
-    doc.setFontSize(14); doc.text('Sarthak Creations — Completed Orders', 14, 15);
-    doc.setFontSize(9); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+    
+    const companyName = settings?.print_header_name || "Sarthak Creations";
+    const address = settings?.print_header_address || "";
+
+    doc.setFontSize(16); doc.text(companyName, 14, 15);
+    doc.setFontSize(10); 
+    if (address) doc.text(address, 14, 22);
+    
+    doc.text("Completed Orders Report", 14, address ? 28 : 22);
+    
     autoTable(doc, {
-      startY: 28,
+      startY: address ? 35 : 30,
       head: [['Sr.', 'Date', 'PO Number', 'Client', 'Product Name', 'Product Type', 'Qty', 'Age', 'Status', 'Remark']],
       body: rows.map((o, i) => [i + 1, new Date(o.date_of_entry).toLocaleDateString(), o.po_number || '',
         o.clients?.name || '', o.product_names?.name || '', o.product_types?.name || '',
@@ -426,7 +438,7 @@ export default function CompletedOrdersPage() {
       {error && <div className="form-error" style={{ marginBottom: '12px' }}>{error}</div>}
 
       <div className="print-only" style={{ display: 'none', marginBottom: '16px' }}>
-        <h2 style={{ margin: 0 }}>Sarthak Creations — Completed Orders</h2>
+        <h2 style={{ margin: 0 }}>{settings?.print_header_name || "Sarthak Creations"} — Completed Orders</h2>
         <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#555' }}>Printed: {printDate}</p>
       </div>
 

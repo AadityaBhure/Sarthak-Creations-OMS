@@ -5,11 +5,13 @@ import CsvImportModal from '@/components/csv/CsvImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
+import { useGlobalSettings } from '@/components/SettingsProvider';
 
 export default function ClientList() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { settings, loading: settingsLoading } = useGlobalSettings();
   
   // Search and Filter
   const [search, setSearch] = useState('');
@@ -17,6 +19,10 @@ export default function ClientList() {
   // Pagination
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+
+  useEffect(() => {
+    if (settings && !settingsLoading) setLimit(settings.default_pagination || 50);
+  }, [settingsLoading, settings]);
   
   // Editing state
   const [isEditable, setIsEditable] = useState(false);

@@ -79,6 +79,11 @@
   --radius:     4px;
   --radius-sm:  2px;
   --shadow-sm:  0 1px 3px rgba(0,0,0,0.08);
+
+  /* TABLE DENSITY: COMFORTABLE (Default) */
+  --table-cell-pad-y: 12px;
+  --table-cell-pad-x: 16px;
+  --table-font-size: 14px;
 }
 
 /* =============================================================================
@@ -142,9 +147,18 @@
   --badge-completed-text: #86efac;
 }
 
-/* =============================================================================
-   RESET & BASE
-   ============================================================================= */
+/* ====================================
+   TABLE DENSITY: COMPACT
+   ==================================== */
+[data-density='compact'] {
+  --table-cell-pad-y: 6px;
+  --table-cell-pad-x: 10px;
+  --table-font-size: 13px;
+}
+
+/* =========================================
+   2. Typography & Basics
+   ========================================= */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
