@@ -128,7 +128,7 @@ export default function ProductNamesList() {
 
   function handleCheckbox(e, productId, index) {
     const newSelected = new Set(selectedIds);
-    if (e.shiftKey && lastCheckedIndex !== null) {
+    if (e.nativeEvent.shiftKey && lastCheckedIndex !== null) {
       const start = Math.min(lastCheckedIndex, index);
       const end   = Math.max(lastCheckedIndex, index);
       const shouldSelect = !selectedIds.has(productId);

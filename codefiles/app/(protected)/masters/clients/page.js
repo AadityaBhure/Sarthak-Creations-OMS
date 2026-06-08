@@ -139,7 +139,7 @@ export default function ClientList() {
   // --- BULK SELECTION ---
   function handleCheckbox(e, clientId, index) {
     const newSelected = new Set(selectedIds);
-    if (e.shiftKey && lastCheckedIndex !== null) {
+    if (e.nativeEvent.shiftKey && lastCheckedIndex !== null) {
       const start = Math.min(lastCheckedIndex, index);
       const end   = Math.max(lastCheckedIndex, index);
       const shouldSelect = !selectedIds.has(clientId);
