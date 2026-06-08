@@ -273,6 +273,26 @@ export default function ProductNamesList() {
 
       {error && <div className="form-error" style={{ marginBottom: '12px' }}>{error}</div>}
 
+      {/* Pagination Bar (Moved to Top) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Rows per page:</span>
+          <select className="form-input" style={{ padding: '4px 8px', fontSize: '13px', width: 'auto' }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Showing {totalFiltered === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalFiltered)} of {totalFiltered}</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
+            <button className="btn btn-secondary btn-sm" disabled={page * limit >= totalFiltered} onClick={() => setPage(page + 1)}>Next</button>
+          </div>
+        </div>
+      </div>
+
       <div className="table-container">
         <table className="data-table">
           <thead>
@@ -337,24 +357,6 @@ export default function ProductNamesList() {
       </div>
 
       {/* Pagination Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontSize: '14px' }}>Rows per page:</span>
-          <select className="form-input" style={{ padding: '4px 8px', fontSize: '13px', width: 'auto' }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={200}>200</option>
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <span style={{ fontSize: '14px' }}>Showing {totalFiltered === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalFiltered)} of {totalFiltered}</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
-            <button className="btn btn-secondary btn-sm" disabled={page * limit >= totalFiltered} onClick={() => setPage(page + 1)}>Next</button>
-          </div>
-        </div>
-      </div>
       {hasPendingEdits() && (
         <div className="floating-save">
           <button className="btn btn-secondary" onClick={discardEdits} disabled={saving}>Discard</button>

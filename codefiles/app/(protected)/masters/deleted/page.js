@@ -19,6 +19,10 @@ export default function RecycleBin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+
   // Lookup maps for deleted orders to show their names
   const [masterMaps, setMasterMaps] = useState({ clients: {}, productNames: {}, productTypes: {} });
 
@@ -286,12 +290,16 @@ export default function RecycleBin() {
       );
     }
 
-    return records.map((record, index) => (
+    const paginatedRecords = records.slice((page - 1) * limit, page * limit);
+
+    return paginatedRecords.map((record, index) => {
+      const globalIndex = (page - 1) * limit + index;
+      return (
       <tr key={record.id} className={selectedIds.has(record.id) ? 'row-selected' : ''}>
         <td className="checkbox-col">
-          <input type="checkbox" checked={selectedIds.has(record.id)} onChange={(e) => toggleSelection(e, record.id, index)} />
+          <input type="checkbox" checked={selectedIds.has(record.id)} onChange={(e) => toggleSelection(e, record.id, globalIndex)} />
         </td>
-        <td style={{ color: 'var(--text-secondary)' }}>{index + 1}</td>
+        <td style={{ color: 'var(--text-secondary)' }}>{globalIndex + 1}</td>
         
         {activeTab === 'deleted_orders' ? (
           <>
@@ -329,7 +337,8 @@ export default function RecycleBin() {
           </div>
         </td>
       </tr>
-    ));
+      );
+    });
   }
 
   return (
@@ -364,6 +373,26 @@ export default function RecycleBin() {
       </div>
 
       {error && <div className="form-error" style={{ marginBottom: '12px' }}>{error}</div>}
+
+      {/* Pagination Bar (Moved to Top) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Rows per page:</span>
+          <select className="form-input" style={{ padding: '4px 8px', fontSize: '13px', width: 'auto' }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px' }}>Showing {records.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, records.length)} of {records.length}</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
+            <button className="btn btn-secondary btn-sm" disabled={page * limit >= records.length} onClick={() => setPage(page + 1)}>Next</button>
+          </div>
+        </div>
+      </div>
 
       <div className="table-container" style={{ overflowX: 'auto' }}>
         <table className="data-table" style={{ minWidth: activeTab === 'deleted_orders' ? '1400px' : '100%' }}>
