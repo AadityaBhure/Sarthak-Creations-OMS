@@ -4,14 +4,25 @@ import { createServerClient } from '@/lib/supabaseClient';
 export async function GET() {
   try {
     const supabase = createServerClient();
-    const { data, error } = await supabase
-      .from('product_names')
-      .select('*')
-      .order('name', { ascending: true });
+    let allData = [];
+    let page = 0;
+    const limit = 1000;
 
-    if (error) throw error;
+    while (true) {
+      const { data, error } = await supabase
+        .from('product_names')
+        .select('*')
+        .order('name', { ascending: true })
+        .range(page * limit, (page + 1) * limit - 1);
 
-    return NextResponse.json(data);
+      if (error) throw error;
+      
+      allData = allData.concat(data);
+      if (data.length < limit) break;
+      page++;
+    }
+
+    return NextResponse.json(allData);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

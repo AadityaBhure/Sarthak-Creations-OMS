@@ -4,12 +4,11 @@ const supabase = createClient('https://kvhacwufjawwrqhhzphz.supabase.co', 'eyJhb
 
 async function testFilter() {
   const { data, error } = await supabase
-    .from('orders')
-    .select('id, quantity, status')
-    .neq('status', 'Completed')
-    .gte('quantity', 2000)
+    .from('clients')
+    .select('name')
+    .ilike('name', 'Stress Test Client 2')
     .limit(10);
-  console.log("Results for active + quantity >= 2000:", data);
+  console.log("Results for Stress Test Client 2:", data);
 }
 
 testFilter();

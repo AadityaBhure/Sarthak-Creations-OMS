@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
-export default function CsvImportModal({ isOpen, onClose, entityName, importEndpoint, onSuccess, columnMap, uniqueColumnDisplay }) {
+export default function ExcelImportModal({ isOpen, onClose, entityName, importEndpoint, onSuccess, columnMap, uniqueColumnDisplay }) {
   const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -12,7 +12,7 @@ export default function CsvImportModal({ isOpen, onClose, entityName, importEndp
 
   if (!isOpen) return null;
 
-  const expectedCsvHeaders = Object.keys(columnMap);
+  const expectedHeaders = Object.keys(columnMap);
 
   function handleFileChange(e) {
     const selectedFile = e.target.files[0];
@@ -23,19 +23,26 @@ export default function CsvImportModal({ isOpen, onClose, entityName, importEndp
   }
 
   function parseFile(file) {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: function(results) {
-        if (results.errors.length > 0) {
-          setError('Error parsing CSV file. Please ensure it has a header row.');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const results = XLSX.utils.sheet_to_json(worksheet, { header: 1 }); // read as array of arrays
+
+        if (!results || results.length < 2) {
+          setError('Error parsing Excel file. Please ensure it has a header row and data.');
           return;
         }
 
+        const rawHeaders = results[0];
+        const dataRows = results.slice(1).filter(row => row.length > 0);
+
         // Validate headers loosely (case-insensitive)
-        const headers = results.meta.fields;
-        const missingCols = expectedCsvHeaders.filter(col => 
-          !headers.some(h => h.toLowerCase() === col.toLowerCase())
+        const missingCols = expectedHeaders.filter(col => 
+          !rawHeaders.some(h => String(h).toLowerCase() === col.toLowerCase())
         );
 
         if (missingCols.length > 0) {
@@ -43,31 +50,43 @@ export default function CsvImportModal({ isOpen, onClose, entityName, importEndp
           return;
         }
 
+        // Convert array rows to object rows based on headers
+        const jsonRows = dataRows.map(rowArray => {
+          const rowObj = {};
+          rawHeaders.forEach((h, i) => {
+            rowObj[h] = rowArray[i];
+          });
+          return rowObj;
+        });
+
         // Map data consistently to DB keys
-        const mappedData = results.data.map(row => {
+        const mappedData = jsonRows.map(row => {
           const newRow = {};
-          expectedCsvHeaders.forEach(csvCol => {
-            const matchedKey = Object.keys(row).find(k => k.toLowerCase() === csvCol.toLowerCase());
+          expectedHeaders.forEach(csvCol => {
+            const matchedKey = Object.keys(row).find(k => String(k).toLowerCase() === csvCol.toLowerCase());
             const dbCol = columnMap[csvCol];
-            newRow[dbCol] = matchedKey ? row[matchedKey] : '';
+            newRow[dbCol] = matchedKey ? String(row[matchedKey] || '') : '';
           });
           return newRow;
         });
 
-        // Add displayData just for the preview table (using expected CSV headers)
-        const displayData = results.data.map(row => {
+        // Add displayData just for the preview table
+        const displayData = jsonRows.map(row => {
           const newRow = {};
-          expectedCsvHeaders.forEach(csvCol => {
-            const matchedKey = Object.keys(row).find(k => k.toLowerCase() === csvCol.toLowerCase());
-            newRow[csvCol] = matchedKey ? row[matchedKey] : '';
+          expectedHeaders.forEach(csvCol => {
+            const matchedKey = Object.keys(row).find(k => String(k).toLowerCase() === csvCol.toLowerCase());
+            newRow[csvCol] = matchedKey ? String(row[matchedKey] || '') : '';
           });
           return newRow;
         });
 
         setPreviewData({ mapped: mappedData, display: displayData });
         setError('');
+      } catch (err) {
+        setError('Error reading Excel file. Ensure it is a valid .xlsx or .csv format.');
       }
-    });
+    };
+    reader.readAsBinaryString(file);
   }
 
   async function handleImport() {
@@ -111,21 +130,20 @@ export default function CsvImportModal({ isOpen, onClose, entityName, importEndp
   return (
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '600px' }}>
-        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>
-          Import {entityName}
-        </h3>
+        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>Import {entityName} from Excel</h3>
+            
+        <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+          Upload an Excel (.xlsx, .xls) or CSV file. It must contain the following columns:
+          <br/>
+          <strong>{expectedHeaders.join(', ')}</strong>
+        </div>
 
         {!result ? (
           <>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px', lineHeight: '1.5' }}>
-              Upload a .csv file. The first row must be headers (e.g. {expectedCsvHeaders.map(c => `"${c}"`).join(', ')}). 
-              Duplicate "{uniqueColumnDisplay}"s will be automatically skipped.
-            </p>
-
             <div style={{ marginBottom: '20px' }}>
               <input 
                 type="file" 
-                accept=".csv" 
+                accept=".xlsx, .xls, .csv" 
                 onChange={handleFileChange}
                 className="form-input"
                 style={{ padding: '8px' }}
@@ -143,18 +161,18 @@ export default function CsvImportModal({ isOpen, onClose, entityName, importEndp
                   <table className="data-table" style={{ margin: 0 }}>
                     <thead>
                       <tr>
-                        {expectedCsvHeaders.map(c => <th key={c} style={{ padding: '6px 12px' }}>{c}</th>)}
+                        {expectedHeaders.map(c => <th key={c} style={{ padding: '6px 12px' }}>{c}</th>)}
                       </tr>
                     </thead>
                     <tbody>
                       {previewData.display.slice(0, 50).map((row, i) => (
                         <tr key={i}>
-                          {expectedCsvHeaders.map(c => <td key={c} style={{ padding: '6px 12px' }}>{row[c]}</td>)}
+                          {expectedHeaders.map(c => <td key={c} style={{ padding: '6px 12px' }}>{row[c]}</td>)}
                         </tr>
                       ))}
                       {previewData.display.length > 50 && (
                         <tr>
-                          <td colSpan={expectedCsvHeaders.length} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <td colSpan={expectedHeaders.length} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                             ... and {previewData.display.length - 50} more rows
                           </td>
                         </tr>

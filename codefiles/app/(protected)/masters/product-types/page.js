@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import CsvImportModal from '@/components/csv/CsvImportModal';
+import ExcelImportModal from '@/components/excel/ExcelImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
@@ -248,7 +248,7 @@ export default function ProductTypesList() {
             + Add Product Type
           </button>
           <button className="btn btn-secondary" onClick={() => setShowCsvModal(true)}>
-            Import CSV
+            Import Excel
           </button>
           <input
             type="text"
@@ -409,8 +409,8 @@ export default function ProductTypesList() {
         </div>
       )}
 
-      {/* CSV Import Modal */}
-      <CsvImportModal 
+      {/* Excel Import Modal */}
+      <ExcelImportModal 
         isOpen={showCsvModal} 
         onClose={() => setShowCsvModal(false)} 
         entityName="Product Types" 
