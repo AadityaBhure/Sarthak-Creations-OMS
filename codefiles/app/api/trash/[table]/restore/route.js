@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 const TABLE_MAP = {
   'deleted_clients': 'clients',
@@ -59,6 +62,21 @@ export async function POST(request, { params }) {
       .eq('id', id);
 
     if (deleteError) throw deleteError;
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      let identifier = originalRecord.name || originalRecord.po_number || originalRecord.first_name || 'Unknown Item';
+      await logActivity({
+        userId: payload.userId,
+        username: payload.username,
+        action: 'RESTORE',
+        module: 'Deleted Records',
+        recordId: id,
+        details: { 'Restored Item': identifier }
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

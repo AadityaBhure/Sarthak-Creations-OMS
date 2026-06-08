@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -30,7 +33,7 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { name, address } = await request.json();
+    const { name, address, phone_number } = await request.json();
 
     if (!name || name.trim() === '') {
       return NextResponse.json({ error: 'Client name is required.' }, { status: 400 });
@@ -39,7 +42,11 @@ export async function POST(request) {
     const supabase = createServerClient();
     const { data, error } = await supabase
       .from('clients')
-      .insert([{ name: name.trim(), address: address ? address.trim() : null }])
+      .insert([{ 
+        name: name.trim(), 
+        address: address ? address.trim() : null,
+        phone_number: phone_number ? phone_number.trim() : null
+      }])
       .select()
       .single();
 
@@ -48,6 +55,21 @@ export async function POST(request) {
         return NextResponse.json({ error: 'A client with this name already exists.' }, { status: 400 });
       }
       throw error;
+    }
+
+    // Log the activity
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      await logActivity({
+        userId: payload.userId,
+        username: payload.username,
+        action: 'CREATE',
+        module: 'Client List',
+        recordId: data.id,
+        details: { name: data.name, address: data.address, phone_number: data.phone_number }
+      });
     }
 
     return NextResponse.json(data);

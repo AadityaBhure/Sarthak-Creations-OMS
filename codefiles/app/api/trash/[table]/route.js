@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 // Allowed tables for trash operations
 const ALLOWED_TABLES = [
@@ -71,12 +74,37 @@ export async function DELETE(request, { params }) {
     }
 
     const supabase = createServerClient();
+
+    // Fetch the record to log what was permanently deleted
+    const { data: recordToLog } = await supabase
+      .from(table)
+      .select('*')
+      .eq('id', id)
+      .single();
+
     const { error } = await supabase
       .from(table)
       .delete()
       .eq('id', id);
 
     if (error) throw error;
+
+    if (recordToLog) {
+      const cookieStore = await cookies();
+      const token = cookieStore.get('session')?.value;
+      const payload = token ? await verifyToken(token) : null;
+      if (payload?.userId) {
+        let identifier = recordToLog.name || recordToLog.po_number || recordToLog.first_name || 'Unknown Item';
+        await logActivity({
+          userId: payload.userId,
+          username: payload.username,
+          action: 'DELETE',
+          module: 'Deleted Records',
+          recordId: id,
+          details: { 'Permanently Deleted Item': identifier }
+        });
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

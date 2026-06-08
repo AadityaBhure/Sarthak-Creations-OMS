@@ -22,6 +22,7 @@ const NAV_SECTIONS = [
   {
     label: 'Masters',
     links: [
+      { href: '/masters/executives', label: 'Executive List' },
       { href: '/masters/clients', label: 'Client List' },
       { href: '/masters/product-names', label: 'Product Names' },
       { href: '/masters/product-types', label: 'Product Types' },

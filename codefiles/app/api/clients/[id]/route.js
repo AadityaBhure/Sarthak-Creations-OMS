@@ -1,16 +1,28 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
-    const { name, address } = await request.json();
+    const { name, address, phone_number } = await request.json();
 
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
-    if (address !== undefined) updateData.address = address.trim();
+    if (address !== undefined) updateData.address = address ? address.trim() : null;
+    if (phone_number !== undefined) updateData.phone_number = phone_number ? phone_number.trim() : null;
 
     const supabase = createServerClient();
+
+    // Fetch existing client to build before/after map
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', id)
+      .single();
+
     const { data, error } = await supabase
       .from('clients')
       .update(updateData)
@@ -23,6 +35,34 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ error: 'A client with this name already exists.' }, { status: 400 });
       }
       throw error;
+    }
+
+    // Log the activity
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      // Build before/after map
+      const changes = {};
+      if (existingClient) {
+        for (const key of Object.keys(updateData)) {
+          if (existingClient[key] !== updateData[key]) {
+            changes[key] = { old: existingClient[key], new: updateData[key] };
+          }
+        }
+      }
+
+      // Only log if there are actual changes
+      if (Object.keys(changes).length > 0) {
+        await logActivity({
+          userId: payload.userId,
+          username: payload.username,
+          action: 'UPDATE',
+          module: 'Client List',
+          recordId: id,
+          details: changes
+        });
+      }
     }
 
     return NextResponse.json(data);
@@ -67,6 +107,21 @@ export async function DELETE(request, { params }) {
         throw new Error('Cannot delete this Client because it is currently linked to an Active Order. Please delete or reassign the related active orders first.');
       }
       throw deleteError;
+    }
+
+    // Log the activity
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      await logActivity({
+        userId: payload.userId,
+        username: payload.username,
+        action: 'DELETE',
+        module: 'Client List',
+        recordId: id,
+        details: { name: client.name }
+      });
     }
 
     return NextResponse.json({ success: true });

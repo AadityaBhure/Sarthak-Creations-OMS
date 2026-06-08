@@ -14,7 +14,9 @@ const FILTER_COLUMNS = [
   { value: 'product_name_id',label: 'Product', type: 'select' },
   { value: 'product_type_id',label: 'Type', type: 'select' },
   { value: 'quantity',       label: 'Quantity',     type: 'number' },
-  { value: 'date_of_entry',  label: 'Date of Entry',type: 'date' }
+  { value: 'executive_id',   label: 'Assigned Executive', type: 'select' },
+  { value: 'date_of_entry',  label: 'Date of Entry',type: 'date' },
+  { value: 'target_date',    label: 'Target Date',  type: 'date' }
 ];
 
 const OPERATORS = {
@@ -31,8 +33,10 @@ const ALL_COLUMNS = [
   { key: 'product_name',  label: 'Product' },
   { key: 'product_type',  label: 'Type' },
   { key: 'quantity',      label: 'Qty' },
+  { key: 'target_date',   label: 'Target' },
   { key: 'age',           label: 'Age' },
   { key: 'status',        label: 'Status' },
+  { key: 'executive',     label: 'Assigned' },
   { key: 'remark',        label: 'Remark' },
 ];
 
@@ -65,6 +69,7 @@ function CompletedOrdersPage() {
   const [clients, setClients] = useState([]);
   const [productNames, setProductNames] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
+  const [executives, setExecutives] = useState([]);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
@@ -127,12 +132,13 @@ function CompletedOrdersPage() {
 
   async function fetchMasters() {
     try {
-      const [cliRes, pNameRes, pTypeRes] = await Promise.all([
-        fetch('/api/clients'), fetch('/api/product-names'), fetch('/api/product-types')
+      const [cliRes, pNameRes, pTypeRes, execRes] = await Promise.all([
+        fetch('/api/clients'), fetch('/api/product-names'), fetch('/api/product-types'), fetch('/api/executives')
       ]);
       if (cliRes.ok) { const d = await cliRes.json(); setClients(d.map(x => ({ value: x.id, label: x.name }))); }
       if (pNameRes.ok) { const d = await pNameRes.json(); setProductNames(d.map(x => ({ value: x.id, label: x.name }))); }
       if (pTypeRes.ok) { const d = await pTypeRes.json(); setProductTypes(d.map(x => ({ value: x.id, label: x.name }))); }
+      if (execRes.ok) { const d = await execRes.json(); setExecutives(d.map(x => ({ value: x.id, label: `${x.first_name} ${x.last_name}` }))); }
     } catch (err) { console.error(err); }
   }
 
@@ -551,8 +557,10 @@ function CompletedOrdersPage() {
               {visibleCols.has('product_name')     && <SortHeader column="product_names.name" label="Product" width="200px" />}
               {visibleCols.has('product_type')     && <SortHeader column="product_types.name" label="Type" width="120px" />}
               {visibleCols.has('quantity')         && <SortHeader column="quantity" label="Qty" width="90px" />}
+              {visibleCols.has('target_date')      && <SortHeader column="target_date" label="Target" width="100px" />}
               {visibleCols.has('age')              && <SortHeader column="date_of_entry" label="Age" width="55px" />}
               {visibleCols.has('status')           && <SortHeader column="status" label="Status" width="160px" />}
+              {visibleCols.has('executive')        && <SortHeader column="users.first_name" label="Assigned" width="130px" />}
               {visibleCols.has('remark')           && <SortHeader column="remark" label="Remark" width="150px" />}
               <th style={{ width: '80px' }} className="no-print">Actions</th>
             </tr>
@@ -573,6 +581,10 @@ function CompletedOrdersPage() {
                 const pNameValId  = getDisplayValue(order, 'product_name_id');
                 const pTypeValId  = getDisplayValue(order, 'product_type_id');
                 const statusVal   = getDisplayValue(order, 'status');
+                const execValId   = getDisplayValue(order, 'executive_id');
+                const targetDateVal = getDisplayValue(order, 'target_date');
+
+                const isOverdue = targetDateVal ? new Date() > new Date(targetDateVal) : false;
 
                 return (
                   <tr key={order.id} style={{ backgroundColor: isSelected ? 'var(--table-row-selected)' : undefined }}>
@@ -611,10 +623,24 @@ function CompletedOrdersPage() {
                         {isEditable ? <input type="number" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '60px' }} value={qtyVal || ''} onChange={e => handleCellChange(order.id, 'quantity', e.target.value)} /> : qtyVal}
                       </td>
                     )}
-                    {visibleCols.has('age') && <td style={{ color: 'var(--text-secondary)' }}>{calcDaysOld(dateVal)}d</td>}
+                    {visibleCols.has('target_date') && (
+                      <td className={pendingEdits[order.id]?.target_date !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '110px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString() : '')}
+                      </td>
+                    )}
+                    {visibleCols.has('age') && (
+                      <td style={{ color: isOverdue ? 'var(--btn-danger-bg)' : 'var(--text-secondary)', fontWeight: isOverdue ? 'bold' : 'normal' }}>
+                        {calcDaysOld(dateVal)}d
+                      </td>
+                    )}
                     {visibleCols.has('status') && (
                       <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''}>
                         {isEditable ? <Select instanceId={`c-status-${order.id}`} options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal) || { value: statusVal, label: statusVal }} onChange={val => handleCellChange(order.id, 'status', val?.value ?? null)} /> : <span className="status-badge" style={getStatusStyle(statusVal)}>{statusVal}</span>}
+                      </td>
+                    )}
+                    {visibleCols.has('executive') && (
+                      <td className={pendingEdits[order.id]?.executive_id !== undefined ? 'cell-edited' : ''}>
+                        {isEditable ? <Select instanceId={`cexec-${order.id}`} options={executives} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={executives.find(c => c.value === execValId)} onChange={val => handleCellChange(order.id, 'executive_id', val?.value ?? null)} placeholder="Assign..." isClearable /> : (order.users ? `${order.users.first_name} ${order.users.last_name}` : <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>)}
                       </td>
                     )}
                     {visibleCols.has('remark') && (

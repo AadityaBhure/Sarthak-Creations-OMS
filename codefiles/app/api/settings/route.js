@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -23,12 +26,46 @@ export async function POST(req) {
     const body = await req.json();
     const supabase = createServerClient();
 
+    // Fetch existing settings
+    const { data: existingSettings } = await supabase
+      .from('global_settings')
+      .select('*')
+      .eq('id', 'default')
+      .single();
+
     const { error } = await supabase
       .from('global_settings')
       .update(body)
       .eq('id', 'default');
 
     if (error) throw error;
+
+    // Log the activity
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      const changes = {};
+      if (existingSettings) {
+        for (const key of Object.keys(body)) {
+          if (existingSettings[key] !== body[key]) {
+            changes[key] = { old: existingSettings[key], new: body[key] };
+          }
+        }
+      }
+
+      if (Object.keys(changes).length > 0) {
+        await logActivity({
+          userId: payload.userId,
+          username: payload.username,
+          action: 'UPDATE',
+          module: 'Settings',
+          recordId: 'default',
+          details: changes
+        });
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

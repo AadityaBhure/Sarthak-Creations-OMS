@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 export async function PATCH(request, { params }) {
   try {
@@ -11,6 +14,14 @@ export async function PATCH(request, { params }) {
     }
 
     const supabase = createServerClient();
+
+    // Fetch existing product type
+    const { data: existingProductType } = await supabase
+      .from('product_types')
+      .select('name')
+      .eq('id', id)
+      .single();
+
     const { data, error } = await supabase
       .from('product_types')
       .update({ name: name.trim() })
@@ -23,6 +34,22 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ error: 'A product type with this name already exists.' }, { status: 400 });
       }
       throw error;
+    }
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      if (existingProductType && existingProductType.name !== data.name) {
+        await logActivity({
+          userId: payload.userId,
+          username: payload.username,
+          action: 'UPDATE',
+          module: 'Product Types',
+          recordId: id,
+          details: { 'Product Type': { old: existingProductType.name, new: data.name } }
+        });
+      }
     }
 
     return NextResponse.json(data);
@@ -63,6 +90,20 @@ export async function DELETE(request, { params }) {
         throw new Error('Cannot delete this Product Type because it is currently linked to an Active Order. Please delete or reassign the related active orders first.');
       }
       throw deleteError;
+    }
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      await logActivity({
+        userId: payload.userId,
+        username: payload.username,
+        action: 'DELETE',
+        module: 'Product Types',
+        recordId: id,
+        details: { 'Product Type': record.name }
+      });
     }
 
     return NextResponse.json({ success: true });

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -48,6 +51,20 @@ export async function POST(request) {
         return NextResponse.json({ error: 'A product with this name already exists.' }, { status: 400 });
       }
       throw error;
+    }
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    if (payload?.userId) {
+      await logActivity({
+        userId: payload.userId,
+        username: payload.username,
+        action: 'CREATE',
+        module: 'Product Names',
+        recordId: data.id,
+        details: { 'Product Name': data.name }
+      });
     }
 
     return NextResponse.json(data);

@@ -99,8 +99,22 @@ export async function POST(request) {
 
     if (error) throw error;
 
+    // Manually map executives to avoid PostgREST schema cache delay issues
+    const { data: usersData } = await supabase.from('users').select('id, first_name, last_name, username');
+    const usersMap = {};
+    if (usersData) {
+      usersData.forEach(u => {
+        usersMap[u.id] = u;
+      });
+    }
+
+    const dataWithUsers = data.map(order => ({
+      ...order,
+      users: order.executive_id ? usersMap[order.executive_id] || null : null
+    }));
+
     return NextResponse.json({
-      data,
+      data: dataWithUsers,
       meta: {
         totalRowCount: count,
         page,

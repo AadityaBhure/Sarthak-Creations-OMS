@@ -36,7 +36,7 @@ export default function ClientList() {
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
-  const [newClient, setNewClient] = useState({ name: '', address: '' });
+  const [newClient, setNewClient] = useState({ name: '', address: '', phone_number: '' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
@@ -101,7 +101,7 @@ export default function ClientList() {
       // Success
       setClients((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setShowModal(false);
-      setNewClient({ name: '', address: '' });
+      setNewClient({ name: '', address: '', phone_number: '' });
     } catch (err) {
       setModalError(err.message);
     } finally {
@@ -322,7 +322,8 @@ export default function ClientList() {
               </th>
               <th style={{ width: '5%' }}>Sr. No.</th>
               <th style={{ width: '30%' }}>Client Name</th>
-              <th style={{ width: '45%' }}>Address</th>
+              <th style={{ width: '30%' }}>Address</th>
+              <th style={{ width: '15%' }}>Phone</th>
               <th style={{ width: '15%' }}>Actions</th>
             </tr>
           </thead>
@@ -373,6 +374,20 @@ export default function ClientList() {
                       />
                     ) : (
                       client.address || <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    )}
+                  </td>
+                  <td className={pendingEdits[client.id]?.phone_number !== undefined ? 'cell-edited' : ''}>
+                    {isEditable ? (
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={getDisplayValue(client, 'phone_number')}
+                        onChange={(e) => handleCellChange(client.id, 'phone_number', e.target.value)}
+                        style={{ padding: '4px 6px', fontSize: '13px' }}
+                        placeholder="No phone"
+                      />
+                    ) : (
+                      client.phone_number || <span style={{ color: 'var(--text-muted)' }}>—</span>
                     )}
                   </td>
                   <td>
@@ -457,6 +472,20 @@ export default function ClientList() {
                 />
               </div>
 
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label" htmlFor="new-client-phone">
+                  Phone Number
+                </label>
+                <input
+                  id="new-client-phone"
+                  type="text"
+                  className="form-input"
+                  value={newClient.phone_number}
+                  onChange={(e) => setNewClient({ ...newClient, phone_number: e.target.value })}
+                  placeholder="e.g., 9876543210"
+                />
+              </div>
+
               <div className="form-group" style={{ marginBottom: '20px' }}>
                 <label className="form-label" htmlFor="new-client-address">
                   Address
@@ -490,7 +519,7 @@ export default function ClientList() {
         onClose={() => setShowCsvModal(false)} 
         entityName="Clients" 
         importEndpoint="/api/clients/import"
-        columnMap={{ 'client name': 'name', 'client address': 'address' }}
+        columnMap={{ 'client name': 'name', 'client address': 'address', 'phone number': 'phone_number' }}
         uniqueColumnDisplay="client name"
         onSuccess={() => {
           fetchClients();

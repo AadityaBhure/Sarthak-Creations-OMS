@@ -27,6 +27,11 @@ export default function NewOrderPage() {
   const [clients, setClients] = useState([]);
   const [productNames, setProductNames] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
+  const [executives, setExecutives] = useState([]);
+
+  // Target Date Input mode
+  const [targetInputMode, setTargetInputMode] = useState('days'); // 'days' or 'date'
+  const [targetDays, setTargetDays] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -37,6 +42,8 @@ export default function NewOrderPage() {
     product_type_id: null,
     quantity: '',
     status: null,
+    executive_id: null,
+    target_date: '',
     remark: ''
   });
 
@@ -49,23 +56,26 @@ export default function NewOrderPage() {
   useEffect(() => {
     async function fetchMasters() {
       try {
-        const [clientRes, pNamesRes, pTypesRes] = await Promise.all([
+        const [clientRes, pNamesRes, pTypesRes, execRes] = await Promise.all([
           fetch('/api/clients'),
           fetch('/api/product-names'),
-          fetch('/api/product-types')
+          fetch('/api/product-types'),
+          fetch('/api/executives')
         ]);
 
-        if (!clientRes.ok || !pNamesRes.ok || !pTypesRes.ok) {
+        if (!clientRes.ok || !pNamesRes.ok || !pTypesRes.ok || !execRes.ok) {
           throw new Error('Failed to load master data');
         }
 
         const clientData = await clientRes.json();
         const pNamesData = await pNamesRes.json();
         const pTypesData = await pTypesRes.json();
+        const execData = await execRes.json();
 
         setClients(clientData.map(c => ({ value: c.id, label: c.name })));
         setProductNames(pNamesData.map(p => ({ value: p.id, label: p.name })));
         setProductTypes(pTypesData.map(p => ({ value: p.id, label: p.name })));
+        setExecutives(execData.map(e => ({ value: e.id, label: `${e.first_name} ${e.last_name} (${e.username})` })));
       } catch (err) {
         setError(err.message);
       } finally {
@@ -87,6 +97,14 @@ export default function NewOrderPage() {
     setSaving(true);
     
     try {
+      // Calculate target date if mode is days
+      let finalTargetDate = formData.target_date;
+      if (targetInputMode === 'days' && targetDays) {
+        const d = new Date(formData.date_of_entry);
+        d.setDate(d.getDate() + parseInt(targetDays, 10));
+        finalTargetDate = d.toISOString().split('T')[0];
+      }
+
       const payload = {
         date_of_entry: formData.date_of_entry,
         po_number: formData.po_number,
@@ -95,6 +113,8 @@ export default function NewOrderPage() {
         product_type_id: formData.product_type_id.value,
         quantity: formData.quantity,
         status: formData.status.value,
+        executive_id: formData.executive_id ? formData.executive_id.value : null,
+        target_date: finalTargetDate || null,
         remark: formData.remark
       };
 
@@ -112,8 +132,11 @@ export default function NewOrderPage() {
           ...formData,
           po_number: '',
           quantity: '',
-          remark: ''
+          remark: '',
+          executive_id: null,
+          target_date: ''
         });
+        setTargetDays('');
         window.scrollTo(0, 0);
         showAlert('Success', 'Order saved successfully!');
       } else {
@@ -273,6 +296,61 @@ export default function NewOrderPage() {
               onChange={val => setFormData({ ...formData, status: val })}
               isClearable={false}
             />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="form-group">
+            <label className="form-label">Assigned Executive</label>
+            <Select 
+              options={executives} 
+              styles={selectStyles}
+              value={formData.executive_id}
+              onChange={val => setFormData({ ...formData, executive_id: val })}
+              placeholder="Assign to..."
+              isClearable
+            />
+          </div>
+          
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>Target Overdue</label>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
+                <button 
+                  type="button" 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: targetInputMode === 'days' ? 'var(--primary-color)' : 'var(--text-muted)', fontWeight: targetInputMode === 'days' ? '600' : '400' }}
+                  onClick={() => setTargetInputMode('days')}
+                >
+                  Days
+                </button>
+                <span style={{ color: 'var(--border)' }}>|</span>
+                <button 
+                  type="button" 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: targetInputMode === 'date' ? 'var(--primary-color)' : 'var(--text-muted)', fontWeight: targetInputMode === 'date' ? '600' : '400' }}
+                  onClick={() => setTargetInputMode('date')}
+                >
+                  Date
+                </button>
+              </div>
+            </div>
+            
+            {targetInputMode === 'days' ? (
+              <input 
+                type="number" 
+                className="form-input" 
+                value={targetDays}
+                onChange={e => setTargetDays(e.target.value)}
+                placeholder="Number of days from Entry Date"
+                min="0"
+              />
+            ) : (
+              <input 
+                type="date" 
+                className="form-input" 
+                value={formData.target_date}
+                onChange={e => setFormData({ ...formData, target_date: e.target.value })}
+              />
+            )}
           </div>
         </div>
 

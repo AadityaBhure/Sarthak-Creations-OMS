@@ -12,6 +12,9 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState('light');
   const [density, setDensity] = useState('comfortable');
 
+  // Logs Export
+  const [logDates, setLogDates] = useState({ from: '', to: '' });
+
   // Extreme Warning Modal for Status Deletion
   const [authModal, setAuthModal] = useState({ isOpen: false, statusToDelete: null, password: '', statusName: '', agreement: '', verifying: false });
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
@@ -204,6 +207,28 @@ export default function SettingsPage() {
             <a href="/api/export-database" download className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
               Download Global Export (.zip)
             </a>
+          </div>
+
+          <div style={{ marginTop: '24px', padding: '20px', background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+            <h4 style={{ fontWeight: '600', marginBottom: '6px', fontSize: '15px' }}>Activity Logs Export</h4>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.4' }}>
+              Download a detailed CSV record of all system activities. Select a date range or leave empty to download everything.
+            </p>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: 'var(--text-secondary)' }}>From Date</label>
+                <input type="date" className="form-input" style={{ padding: '6px 12px' }} value={logDates.from} onChange={e => setLogDates({ ...logDates, from: e.target.value })} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: 'var(--text-secondary)' }}>To Date</label>
+                <input type="date" className="form-input" style={{ padding: '6px 12px' }} value={logDates.to} onChange={e => setLogDates({ ...logDates, to: e.target.value })} />
+              </div>
+              <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                <a href={`/api/logs/export?from=${logDates.from}&to=${logDates.to}`} download className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                  Download Logs (CSV)
+                </a>
+              </div>
+            </div>
           </div>
         </div>
 
