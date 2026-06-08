@@ -11,10 +11,10 @@ import { createBrowserClient } from '@/lib/supabaseClient';
 import { useGlobalSettings } from '@/components/SettingsProvider';
 
 const FILTER_COLUMNS = [
-  { value: 'po_number', label: 'PO Number', type: 'text' },
+  { value: 'po_number', label: 'PO. No.', type: 'text' },
   { value: 'client_id', label: 'Client', type: 'select' },
-  { value: 'product_name_id', label: 'Product Name', type: 'select' },
-  { value: 'product_type_id', label: 'Product Type', type: 'select' },
+  { value: 'product_name_id', label: 'Product', type: 'select' },
+  { value: 'product_type_id', label: 'Type', type: 'select' },
   { value: 'quantity', label: 'Quantity', type: 'number' },
   { value: 'status', label: 'Status', type: 'select' },
   { value: 'date_of_entry', label: 'Date of Entry', type: 'date' }
@@ -29,10 +29,10 @@ const OPERATORS = {
 
 const ALL_COLUMNS = [
   { key: 'date_of_entry', label: 'Date' },
-  { key: 'po_number',     label: 'PO Number' },
+  { key: 'po_number',     label: 'PO. No.' },
   { key: 'client',        label: 'Client' },
-  { key: 'product_name',  label: 'Product Name' },
-  { key: 'product_type',  label: 'Product Type' },
+  { key: 'product_name',  label: 'Product' },
+  { key: 'product_type',  label: 'Type' },
   { key: 'quantity',      label: 'Qty' },
   { key: 'age',           label: 'Age' },
   { key: 'status',        label: 'Status' },
@@ -269,7 +269,7 @@ function ActiveOrdersPage() {
   // ---- EXPORT ----
   function exportCSV() {
     const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
-    const headers = ['Sr.', 'Date', 'PO Number', 'Client', 'Product Name', 'Product Type', 'Quantity', 'Age (days)', 'Status', 'Remark'];
+    const headers = ['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Age (days)', 'Status', 'Remark'];
     const csvRows = [
       headers.join(','),
       ...rows.map((o, i) => [
@@ -314,7 +314,7 @@ function ActiveOrdersPage() {
     
     autoTable(doc, {
       startY: address ? 35 : 30,
-      head: [['Sr.', 'Date', 'PO Number', 'Client', 'Product Name', 'Product Type', 'Qty', 'Age', 'Status', 'Remark']],
+      head: [['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remark']],
       body: rows.map((o, i) => [
         i + 1,
         new Date(o.date_of_entry).toLocaleDateString(),
@@ -596,10 +596,10 @@ function ActiveOrdersPage() {
               </th>
               <th style={{ width: '40px' }}>Sr.</th>
               {visibleCols.has('date_of_entry')   && <SortHeader column="date_of_entry" label="Date" width="135px" />}
-              {visibleCols.has('po_number')        && <SortHeader column="po_number" label="PO Number" width="110px" />}
+              {visibleCols.has('po_number')        && <SortHeader column="po_number" label="PO. No." width="110px" />}
               {visibleCols.has('client')           && <SortHeader column="clients.name" label="Client" width="200px" />}
-              {visibleCols.has('product_name')     && <SortHeader column="product_names.name" label="Product Name" width="180px" />}
-              {visibleCols.has('product_type')     && <SortHeader column="product_types.name" label="Product Type" width="150px" />}
+              {visibleCols.has('product_name')     && <SortHeader column="product_names.name" label="Product" width="200px" />}
+              {visibleCols.has('product_type')     && <SortHeader column="product_types.name" label="Type" width="120px" />}
               {visibleCols.has('quantity')         && <SortHeader column="quantity" label="Qty" width="90px" />}
               {visibleCols.has('age')              && <SortHeader column="date_of_entry" label="Age" width="55px" />}
               {visibleCols.has('status')           && <SortHeader column="status" label="Status" width="160px" />}
