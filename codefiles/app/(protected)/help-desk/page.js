@@ -140,6 +140,41 @@ export default function HelpDeskPage() {
           </table>
         </section>
 
+        {/* Section 5: System Auditing & Activity Logs */}
+        <section>
+          <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
+            5. System Auditing & Activity Logs
+          </h3>
+          <table className="data-table" style={{ width: '100%', marginBottom: '16px' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '25%' }}>Rule</th>
+                <th style={{ width: '75%' }}>How it Works</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Comprehensive Tracking</strong></td>
+                <td>
+                  The system silently logs every Create, Update, Delete, and Restore action across all modules. It tracks exactly who made the change, when it happened, and what specific fields were modified.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Old vs. New Comparison</strong></td>
+                <td>
+                  When a record is edited, the system doesn't just say "Record Updated". It compares the old data with the new data and generates a human-readable sentence (e.g., <em>"changed Status from 'Design Confirmed' to 'In Progress'"</em>), guaranteeing complete transparency for audits.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Assignment History</strong></td>
+                <td>
+                  When an order's Assigned Executive is changed, the system automatically injects a permanent historical stamp into the Remarks field (e.g., <code>[Assignment: John -&gt; Jane]</code>) so anyone looking at the order instantly knows its routing history.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
       </div>
     </div>
   );
