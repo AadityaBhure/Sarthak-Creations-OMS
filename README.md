@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🖨️ Sarthak Creations — Order Management System
+# Sarthak Creations — Order Management System
 
 **A web-based Order Management and Production Tracking System**
 built for a printing and packaging business.
