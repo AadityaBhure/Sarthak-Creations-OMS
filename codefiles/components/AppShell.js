@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import TopHeader from '@/components/TopHeader';
 
-export default function AppShell({ children }) {
+export default function AppShell({ children, user }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Persist collapse state across page loads
@@ -40,7 +40,7 @@ export default function AppShell({ children }) {
         className="app-main"
         style={{ marginLeft: sidebarOpen ? 'var(--sidebar-width)' : '0' }}
       >
-        <TopHeader />
+        <TopHeader user={user} />
         <div className="page-content">
           {children}
         </div>

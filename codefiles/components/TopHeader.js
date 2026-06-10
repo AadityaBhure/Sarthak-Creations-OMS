@@ -24,13 +24,21 @@ function getTitle(pathname) {
   return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
 }
 
-export default function TopHeader() {
+export default function TopHeader({ user }) {
   const pathname = usePathname();
   const title = getTitle(pathname);
 
+  // Fallback for older admin logins or tokens without names
+  const displayName = user ? (user.firstName ? `${user.firstName} ${user.lastName}` : (user.username || 'Administrator')) : '';
+
   return (
-    <header className="top-header">
+    <header className="top-header" style={{ justifyContent: 'space-between' }}>
       <span className="top-header-title">{title}</span>
+      {displayName && (
+        <div className="top-header-user" style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+          {displayName}
+        </div>
+      )}
     </header>
   );
 }
