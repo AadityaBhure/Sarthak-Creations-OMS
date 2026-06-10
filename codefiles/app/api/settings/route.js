@@ -44,7 +44,7 @@ export async function POST(req) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       const changes = {};
       if (existingSettings) {
         for (const key of Object.keys(body)) {
@@ -56,8 +56,8 @@ export async function POST(req) {
 
       if (Object.keys(changes).length > 0) {
         await logActivity({
-          userId: payload.userId,
-          username: payload.username,
+          userId: payload.userId || null,
+          username: payload.username || 'Admin',
           action: 'UPDATE',
           module: 'Settings',
           recordId: 'default',

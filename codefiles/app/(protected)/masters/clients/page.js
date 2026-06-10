@@ -26,7 +26,7 @@ export default function ClientList() {
   
   // Editing state
   const [isEditable, setIsEditable] = useState(false);
-  const [pendingEdits, setPendingEdits] = useState({}); // { id: { name, address } }
+  const [pendingEdits, setPendingEdits] = useState({}); // { id: { name, contact_person } }
   const [saving, setSaving] = useState(false);
 
   // Bulk Selection
@@ -36,7 +36,7 @@ export default function ClientList() {
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
-  const [newClient, setNewClient] = useState({ name: '', address: '', phone_number: '' });
+  const [newClient, setNewClient] = useState({ name: '', contact_person: '', phone_number: '' });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
@@ -101,7 +101,7 @@ export default function ClientList() {
       // Success
       setClients((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setShowModal(false);
-      setNewClient({ name: '', address: '', phone_number: '' });
+      setNewClient({ name: '', contact_person: '', phone_number: '' });
     } catch (err) {
       setModalError(err.message);
     } finally {
@@ -248,7 +248,7 @@ export default function ClientList() {
   // Filter clients based on search
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
-    (c.address && c.address.toLowerCase().includes(search.toLowerCase()))
+    (c.contact_person && c.contact_person.toLowerCase().includes(search.toLowerCase()))
   );
 
   // Pagination slice
@@ -322,7 +322,7 @@ export default function ClientList() {
               </th>
               <th style={{ width: '5%' }}>Sr. No.</th>
               <th style={{ width: '30%' }}>Client Name</th>
-              <th style={{ width: '30%' }}>Address</th>
+              <th style={{ width: '30%' }}>Contact Person</th>
               <th style={{ width: '15%' }}>Phone</th>
               <th style={{ width: '15%' }}>Actions</th>
             </tr>
@@ -362,18 +362,18 @@ export default function ClientList() {
                       client.name
                     )}
                   </td>
-                  <td className={pendingEdits[client.id]?.address !== undefined ? 'cell-edited' : ''}>
+                  <td className={pendingEdits[client.id]?.contact_person !== undefined ? 'cell-edited' : ''}>
                     {isEditable ? (
                       <input
                         type="text"
-                        className="form-input"
-                        value={getDisplayValue(client, 'address')}
-                        onChange={(e) => handleCellChange(client.id, 'address', e.target.value)}
-                        style={{ padding: '4px 6px', fontSize: '13px' }}
-                        placeholder="No address"
+                        className="form-input tbl-input"
+                        value={getDisplayValue(client, 'contact_person')}
+                        onChange={(e) => handleCellChange(client.id, 'contact_person', e.target.value)}
+                        style={{ minWidth: '150px' }}
+                        placeholder="No contact person"
                       />
                     ) : (
-                      client.address || <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      client.contact_person || <span style={{ color: 'var(--text-muted)' }}>-</span>
                     )}
                   </td>
                   <td className={pendingEdits[client.id]?.phone_number !== undefined ? 'cell-edited' : ''}>
@@ -473,6 +473,20 @@ export default function ClientList() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label" htmlFor="new-client-contact-person">
+                  Contact Person
+                </label>
+                <input
+                  id="new-client-contact-person"
+                  type="text"
+                  className="form-input"
+                  value={newClient.contact_person}
+                  onChange={(e) => setNewClient({ ...newClient, contact_person: e.target.value })}
+                  placeholder="e.g. John Doe"
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
                 <label className="form-label" htmlFor="new-client-phone">
                   Phone Number
                 </label>
@@ -483,20 +497,6 @@ export default function ClientList() {
                   value={newClient.phone_number}
                   onChange={(e) => setNewClient({ ...newClient, phone_number: e.target.value })}
                   placeholder="e.g., 9876543210"
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label className="form-label" htmlFor="new-client-address">
-                  Address
-                </label>
-                <textarea
-                  id="new-client-address"
-                  className="form-textarea"
-                  value={newClient.address}
-                  onChange={(e) => setNewClient({ ...newClient, address: e.target.value })}
-                  placeholder="Street, City, PIN"
-                  style={{ minHeight: '60px' }}
                 />
               </div>
 
@@ -519,7 +519,7 @@ export default function ClientList() {
         onClose={() => setShowCsvModal(false)} 
         entityName="Clients" 
         importEndpoint="/api/clients/import"
-        columnMap={{ 'client name': 'name', 'client address': 'address', 'phone number': 'phone_number' }}
+        columnMap={{ 'client name': 'name', 'contact person': 'contact_person', 'phone number': 'phone_number' }}
         uniqueColumnDisplay="client name"
         onSuccess={() => {
           fetchClients();

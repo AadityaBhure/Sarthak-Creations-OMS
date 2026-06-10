@@ -14,7 +14,7 @@ const NAV_SECTIONS = [
   {
     label: 'Orders',
     links: [
-      { href: '/orders', label: 'Active Orders' },
+      { href: '/orders', label: 'Order List' },
       { href: '/orders/completed', label: 'Completed Orders' },
       { href: '/orders/new', label: 'New Order' },
     ],

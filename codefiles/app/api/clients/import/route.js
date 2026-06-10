@@ -15,7 +15,7 @@ export async function POST(request) {
     const validRows = rows
       .map(row => ({
         name: row.name ? String(row.name).trim() : '',
-        address: row.address ? String(row.address).trim() : null,
+        contact_person: row.contact_person ? String(row.contact_person).trim() : null,
         phone_number: row.phone_number ? String(row.phone_number).trim() : null
       }))
       .filter(row => row.name !== '');

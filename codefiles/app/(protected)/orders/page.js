@@ -40,7 +40,8 @@ const ALL_COLUMNS = [
   { key: 'age',           label: 'Age' },
   { key: 'status',        label: 'Status' },
   { key: 'executive',     label: 'Assigned' },
-  { key: 'remark',        label: 'Remark' },
+  { key: 'remark',        label: 'Remarks' },
+  { key: 'assignment_history', label: 'In-Charge (History)' },
 ];
 
 export default function ActiveOrdersPageWrapper() {
@@ -275,7 +276,7 @@ function ActiveOrdersPage() {
   // ---- EXPORT ----
   function exportCSV() {
     const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
-    const headers = ['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Age (days)', 'Status', 'Remark'];
+    const headers = ['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Age (days)', 'Status', 'Remarks', 'In-Charge (History)'];
     const csvRows = [
       headers.join(','),
       ...rows.map((o, i) => [
@@ -285,10 +286,11 @@ function ActiveOrdersPage() {
         `"${o.clients?.name || ''}"`,
         `"${o.product_names?.name || ''}"`,
         `"${o.product_types?.name || ''}"`,
-        o.quantity,
+        o.quantity != null ? `"${new Intl.NumberFormat('en-IN').format(o.quantity)}"` : '',
         calcDaysOld(o.date_of_entry),
         `"${o.status || ''}"`,
-        `"${(o.remark || '').replace(/"/g, '""')}"`
+        `"${(o.remark || '').replace(/"/g, '""')}"`,
+        `"${(o.assignment_history || '').replace(/"/g, '""')}"`
       ].join(','))
     ];
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
@@ -316,11 +318,11 @@ function ActiveOrdersPage() {
     if (address) {
       doc.text(address, 14, 22);
     }
-    doc.text("Active Orders Report", 14, address ? 28 : 22);
+    doc.text("Order List Report", 14, address ? 28 : 22);
     
     autoTable(doc, {
       startY: address ? 35 : 30,
-      head: [['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remark']],
+      head: [['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remarks', 'In-Charge']],
       body: rows.map((o, i) => [
         i + 1,
         new Date(o.date_of_entry).toLocaleDateString(),
@@ -328,10 +330,11 @@ function ActiveOrdersPage() {
         o.clients?.name || '',
         o.product_names?.name || '',
         o.product_types?.name || '',
-        o.quantity,
+        o.quantity != null ? new Intl.NumberFormat('en-IN').format(o.quantity) : '',
         `${calcDaysOld(o.date_of_entry)}d`,
         o.status || '',
-        o.remark || ''
+        o.remark || '',
+        o.assignment_history || ''
       ]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [30, 30, 30] }
@@ -471,7 +474,7 @@ function ActiveOrdersPage() {
   }
 
   const tblSelectStyles = {
-    control: base => ({ ...base, minHeight: '32px', height: '32px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'none' }),
+    control: base => ({ ...base, minWidth: '200px', minHeight: '32px', height: '32px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'none' }),
     menu: base => ({ ...base, backgroundColor: 'var(--bg-surface)', zIndex: 9999 }),
     option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? 'var(--table-row-hover)' : 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }),
     singleValue: base => ({ ...base, color: 'var(--text-primary)' }),
@@ -589,7 +592,7 @@ function ActiveOrdersPage() {
 
       {/* Print-only header */}
       <div className="print-only" style={{ display: 'none', marginBottom: '16px' }}>
-        <h2 style={{ margin: 0 }}>Sarthak Creations — Active Orders</h2>
+        <h2 style={{ margin: 0 }}>Sarthak Creations — Order List</h2>
         <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#555' }}>Printed: {printDate}</p>
       </div>
 
@@ -632,7 +635,8 @@ function ActiveOrdersPage() {
               {visibleCols.has('age')              && <SortHeader column="date_of_entry" label="Age" width="55px" />}
               {visibleCols.has('status')           && <SortHeader column="status" label="Status" width="160px" />}
               {visibleCols.has('executive')        && <SortHeader column="users.first_name" label="Assigned" width="130px" />}
-              {visibleCols.has('remark')           && <SortHeader column="remark" label="Remark" width="150px" />}
+              {visibleCols.has('remark')           && <SortHeader column="remark" label="Remarks" width="150px" />}
+              {visibleCols.has('assignment_history') && <SortHeader column="assignment_history" label="In-Charge" width="150px" />}
               <th style={{ width: '80px' }} className="no-print">Actions</th>
             </tr>
           </thead>
@@ -648,6 +652,7 @@ function ActiveOrdersPage() {
                 const dateVal    = getDisplayValue(order, 'date_of_entry');
                 const qtyVal     = getDisplayValue(order, 'quantity');
                 const remarkVal  = getDisplayValue(order, 'remark');
+                const historyVal = getDisplayValue(order, 'assignment_history');
                 const clientValId  = getDisplayValue(order, 'client_id');
                 const pNameValId   = getDisplayValue(order, 'product_name_id');
                 const pTypeValId   = getDisplayValue(order, 'product_type_id');
@@ -658,7 +663,7 @@ function ActiveOrdersPage() {
                 const isOverdue = targetDateVal ? new Date() > new Date(targetDateVal) : false;
 
                 return (
-                  <tr key={order.id} style={{ backgroundColor: isSelected ? 'var(--table-row-selected)' : undefined }}>
+                  <tr key={order.id} className={selectedIds.size > 0 && !isSelected ? 'print-hidden-row' : ''} style={{ backgroundColor: isSelected ? 'var(--table-row-selected)' : undefined }}>
                     <td className="no-print">
                       <input
                         type="checkbox"
@@ -696,7 +701,7 @@ function ActiveOrdersPage() {
                     )}
                     {visibleCols.has('quantity') && (
                       <td className={pendingEdits[order.id]?.quantity !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="number" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '60px' }} value={qtyVal || ''} onChange={e => handleCellChange(order.id, 'quantity', e.target.value)} /> : qtyVal}
+                        {isEditable ? <input type="number" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '90px' }} value={qtyVal || ''} onChange={e => handleCellChange(order.id, 'quantity', e.target.value)} /> : (qtyVal != null ? new Intl.NumberFormat('en-IN').format(qtyVal) : '')}
                       </td>
                     )}
                     {visibleCols.has('target_date') && (
@@ -721,7 +726,18 @@ function ActiveOrdersPage() {
                     )}
                     {visibleCols.has('remark') && (
                       <td className={pendingEdits[order.id]?.remark !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={remarkVal || ''} onChange={e => handleCellChange(order.id, 'remark', e.target.value)} /> : remarkVal}
+                        {isEditable ? <textarea className="form-input tbl-input" style={{ minWidth: '150px', resize: 'vertical', minHeight: '32px', padding: '4px 8px' }} rows={1} value={remarkVal || ''} 
+                        ref={el => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+                        onChange={e => {
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${e.target.scrollHeight}px`;
+                          handleCellChange(order.id, 'remark', e.target.value);
+                        }} /> : remarkVal}
+                      </td>
+                    )}
+                    {visibleCols.has('assignment_history') && (
+                      <td>
+                        <div style={{ whiteSpace: 'pre-wrap', fontSize: '12px', color: 'var(--text-secondary)' }}>{historyVal}</div>
                       </td>
                     )}
                     <td className="no-print">
@@ -779,6 +795,7 @@ function ActiveOrdersPage() {
           </button>
           <button className="btn btn-secondary btn-sm" onClick={exportCSV}>Export CSV</button>
           <button className="btn btn-secondary btn-sm" onClick={exportPDF}>Export PDF</button>
+          <button className="btn btn-secondary btn-sm" onClick={handlePrint}>Print</button>
           <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => setBulkDelConfirm(true)} disabled={saving}>
             Delete Selected
           </button>

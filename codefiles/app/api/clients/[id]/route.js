@@ -7,11 +7,11 @@ import { logActivity } from '@/lib/logger';
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
-    const { name, address, phone_number } = await request.json();
+    const { name, contact_person, phone_number } = await request.json();
 
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
-    if (address !== undefined) updateData.address = address ? address.trim() : null;
+    if (contact_person !== undefined) updateData.contact_person = contact_person ? contact_person.trim() : null;
     if (phone_number !== undefined) updateData.phone_number = phone_number ? phone_number.trim() : null;
 
     const supabase = createServerClient();
@@ -41,7 +41,7 @@ export async function PATCH(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       // Build before/after map
       const changes = {};
       if (existingClient) {
@@ -55,8 +55,8 @@ export async function PATCH(request, { params }) {
       // Only log if there are actual changes
       if (Object.keys(changes).length > 0) {
         await logActivity({
-          userId: payload.userId,
-          username: payload.username,
+          userId: payload.userId || null,
+          username: payload.username || 'Admin',
           action: 'UPDATE',
           module: 'Client List',
           recordId: id,
@@ -113,10 +113,10 @@ export async function DELETE(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'DELETE',
         module: 'Client List',
         recordId: id,

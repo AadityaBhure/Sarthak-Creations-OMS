@@ -93,11 +93,11 @@ export async function DELETE(request, { params }) {
       const cookieStore = await cookies();
       const token = cookieStore.get('session')?.value;
       const payload = token ? await verifyToken(token) : null;
-      if (payload?.userId) {
+      if (payload && (payload.userId || payload.role === 'admin')) {
         let identifier = recordToLog.name || recordToLog.po_number || recordToLog.first_name || 'Unknown Item';
         await logActivity({
-          userId: payload.userId,
-          username: payload.username,
+          userId: payload.userId || null,
+          username: payload.username || 'Admin',
           action: 'DELETE',
           module: 'Deleted Records',
           recordId: id,

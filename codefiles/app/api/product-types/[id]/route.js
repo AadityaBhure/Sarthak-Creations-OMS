@@ -39,11 +39,11 @@ export async function PATCH(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       if (existingProductType && existingProductType.name !== data.name) {
         await logActivity({
-          userId: payload.userId,
-          username: payload.username,
+          userId: payload.userId || null,
+          username: payload.username || 'Admin',
           action: 'UPDATE',
           module: 'Product Types',
           recordId: id,
@@ -95,10 +95,10 @@ export async function DELETE(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'DELETE',
         module: 'Product Types',
         recordId: id,

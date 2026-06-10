@@ -54,7 +54,7 @@ export async function PATCH(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       const changes = {};
       if (existingUser) {
         if (existingUser.first_name !== data.first_name) changes['First Name'] = { old: existingUser.first_name, new: data.first_name };
@@ -65,8 +65,8 @@ export async function PATCH(request, { params }) {
 
       if (Object.keys(changes).length > 0) {
         await logActivity({
-          userId: payload.userId,
-          username: payload.username,
+          userId: payload.userId || null,
+          username: payload.username || 'Admin',
           action: 'UPDATE',
           module: 'Executive List',
           recordId: id,
@@ -121,10 +121,10 @@ export async function DELETE(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'DELETE',
         module: 'Executive List',
         recordId: id,

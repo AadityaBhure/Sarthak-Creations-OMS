@@ -30,8 +30,14 @@ export async function logActivity({ userId, username, action, module, recordId, 
       
     if (error) {
       console.error('[logActivity Error]', error.message);
+      try {
+        require('fs').appendFileSync('C:\\\\Users\\\\LOQ\\\\.gemini\\\\antigravity\\\\brain\\\\b7f93852-94e0-4b9c-8115-b123c15ca502\\\\scratch\\\\log_error.txt', new Date().toISOString() + ' ERROR: ' + error.message + '\\n');
+      } catch(e){}
     }
   } catch (err) {
     console.error('[logActivity Exception]', err);
+    try {
+        require('fs').appendFileSync('C:\\\\Users\\\\LOQ\\\\.gemini\\\\antigravity\\\\brain\\\\b7f93852-94e0-4b9c-8115-b123c15ca502\\\\scratch\\\\log_error.txt', new Date().toISOString() + ' EXCEPTION: ' + err.message + '\\n');
+    } catch(e){}
   }
 }

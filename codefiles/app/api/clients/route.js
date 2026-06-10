@@ -33,7 +33,7 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { name, address, phone_number } = await request.json();
+    const { name, contact_person, phone_number } = await request.json();
 
     if (!name || name.trim() === '') {
       return NextResponse.json({ error: 'Client name is required.' }, { status: 400 });
@@ -44,7 +44,7 @@ export async function POST(request) {
       .from('clients')
       .insert([{ 
         name: name.trim(), 
-        address: address ? address.trim() : null,
+        contact_person: contact_person ? contact_person.trim() : null,
         phone_number: phone_number ? phone_number.trim() : null
       }])
       .select()
@@ -61,14 +61,14 @@ export async function POST(request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'CREATE',
         module: 'Client List',
         recordId: data.id,
-        details: { name: data.name, address: data.address, phone_number: data.phone_number }
+        details: { name: data.name, contact_person: data.contact_person, phone_number: data.phone_number }
       });
     }
 

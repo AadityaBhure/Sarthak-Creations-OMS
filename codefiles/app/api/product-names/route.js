@@ -56,10 +56,10 @@ export async function POST(request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'CREATE',
         module: 'Product Names',
         recordId: data.id,

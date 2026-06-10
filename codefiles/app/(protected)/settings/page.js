@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import AlertModal from '@/components/ui/AlertModal';
+import { useGlobalSettings } from '@/components/SettingsProvider';
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { settings, setSettings, loading } = useGlobalSettings();
   const [saving, setSaving] = useState(false);
 
   // Local preferences
@@ -19,17 +19,13 @@ export default function SettingsPage() {
   const [authModal, setAuthModal] = useState({ isOpen: false, statusToDelete: null, password: '', statusName: '', agreement: '', verifying: false });
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, title: '', message: '' });
   const [addPrompt, setAddPrompt] = useState({ isOpen: false, value: '' });
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [editingStatusIdx, setEditingStatusIdx] = useState(null);
+  const [editingStatusValue, setEditingStatusValue] = useState('');
 
   useEffect(() => {
-    // Load global settings from API
-    fetch('/api/settings')
-      .then(res => res.json())
-      .then(data => {
-        if (!data.error) {
-          setSettings(data);
-        }
-        setLoading(false);
-      });
+    // Trigger background logs cleanup
+    fetch('/api/logs/cleanup').catch(console.error);
 
     // Load local preferences
     setTheme(localStorage.getItem('oms-theme') || 'light');
@@ -99,6 +95,71 @@ export default function SettingsPage() {
     saveGlobalSettings(settings);
   }
 
+  // --- Drag & Drop for Status Options ---
+  function handleDragStart(e, idx) {
+    setDraggedIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, idx) {
+    e.preventDefault();
+  }
+
+  function handleDrop(e, idx) {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === idx) return;
+
+    const nextArr = [...settings.status_options];
+    const draggedItem = nextArr[draggedIdx];
+    nextArr.splice(draggedIdx, 1);
+    nextArr.splice(idx, 0, draggedItem);
+    
+    saveGlobalSettings({ ...settings, status_options: nextArr });
+    setDraggedIdx(null);
+  }
+
+  // --- Editing Status Name ---
+  function startEditingStatus(idx, currentName) {
+    setEditingStatusIdx(idx);
+    setEditingStatusValue(currentName);
+  }
+
+  async function saveEditedStatusName(idx, oldName) {
+    const newName = editingStatusValue.trim();
+    if (!newName || newName === oldName) {
+      setEditingStatusIdx(null);
+      return;
+    }
+    if (settings.status_options.find((s, i) => i !== idx && (typeof s === 'string' ? s : s.name) === newName)) {
+      setAlertInfo({ isOpen: true, title: 'Error', message: 'Status already exists.' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Run the migration via an API route
+      const res = await fetch('/api/orders/migrate-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldName, newName })
+      });
+      if (!res.ok) throw new Error('Failed to migrate existing orders');
+
+      const nextArr = [...settings.status_options];
+      const current = nextArr[idx];
+      nextArr[idx] = typeof current === 'string'
+        ? { name: newName, bg: '#f3f4f6', text: '#4b5563' }
+        : { ...current, name: newName };
+
+      await saveGlobalSettings({ ...settings, status_options: nextArr });
+    } catch (e) {
+      setAlertInfo({ isOpen: true, title: 'Error', message: e.message });
+    } finally {
+      setEditingStatusIdx(null);
+      setSaving(false);
+    }
+  }
+
   function promptDeleteStatus(statusName) {
     setAuthModal({ isOpen: true, statusToDelete: statusName, password: '', statusName: '', agreement: '', verifying: false });
   }
@@ -166,18 +227,38 @@ export default function SettingsPage() {
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>1. Data & System</h3>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' }}>
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '8px' }}>Recycle Bin Auto-Purge (Days)</label>
-              <input 
-                type="number" 
-                className="form-input" 
-                style={{ width: '100%', maxWidth: '200px' }}
-                value={settings?.recycle_retention_days || 10}
-                onChange={(e) => saveGlobalSettings({ ...settings, recycle_retention_days: parseInt(e.target.value) || 10 })}
-              />
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.4' }}>
-                Records in the Recycle Bin will be permanently erased after this duration.
-              </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>
+                  Recycle Bin Retention (Days)
+                </label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  style={{ width: '100%', maxWidth: '200px' }}
+                  value={settings?.recycle_retention_days || 10}
+                  onChange={(e) => saveGlobalSettings({ ...settings, recycle_retention_days: parseInt(e.target.value) || 10 })}
+                />
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.4' }}>
+                  Records in the Recycle Bin will be permanently erased after this duration.
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>
+                  Activity Logs Retention (Days)
+                </label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  style={{ width: '100%', maxWidth: '200px' }}
+                  value={settings?.log_retention_days || 30}
+                  onChange={(e) => saveGlobalSettings({ ...settings, log_retention_days: parseInt(e.target.value) || 30 })}
+                />
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.4' }}>
+                  System activity logs will be automatically purged after this duration to save space.
+                </p>
+              </div>
             </div>
 
             <div>
@@ -279,9 +360,35 @@ export default function SettingsPage() {
               const sText = typeof s === 'string' ? '#4b5563' : (s.text || '#4b5563');
 
               return (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-page)', padding: '10px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                <div 
+                  key={idx}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: draggedIdx === idx ? 'var(--bg-hover)' : 'var(--bg-page)', padding: '10px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', opacity: draggedIdx === idx ? 0.5 : 1 }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <span style={{ fontWeight: '600', fontSize: '13px', padding: '4px 8px', borderRadius: '4px', backgroundColor: sBg, color: sText, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{sName}</span>
+                    <span style={{ cursor: 'grab', color: 'var(--text-muted)' }} title="Drag to reorder">☰</span>
+                    {editingStatusIdx === idx ? (
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={editingStatusValue}
+                        onChange={(e) => setEditingStatusValue(e.target.value)}
+                        onBlur={() => saveEditedStatusName(idx, sName)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEditedStatusName(idx, sName);
+                          if (e.key === 'Escape') setEditingStatusIdx(null);
+                        }}
+                        autoFocus
+                        style={{ padding: '4px 8px', width: '150px' }}
+                      />
+                    ) : (
+                      <span onDoubleClick={() => startEditingStatus(idx, sName)} style={{ cursor: 'pointer', fontWeight: '600', fontSize: '13px', padding: '4px 8px', borderRadius: '4px', backgroundColor: sBg, color: sText, textTransform: 'uppercase', letterSpacing: '0.5px' }} title="Double click to edit">
+                        {sName}
+                      </span>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                         Bg: <input type="color" value={sBg} onChange={e => handleColorChange(idx, 'bg', e.target.value)} onBlur={saveColors} style={{ width: '24px', height: '24px', padding: '0', border: 'none', borderRadius: '4px', cursor: 'pointer' }} />
@@ -291,7 +398,10 @@ export default function SettingsPage() {
                       </label>
                     </div>
                   </div>
-                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => promptDeleteStatus(sName)}>Remove</button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => startEditingStatus(idx, sName)}>Edit</button>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--btn-danger-bg)' }} onClick={() => promptDeleteStatus(sName)}>Remove</button>
+                  </div>
                 </div>
               );
             })}

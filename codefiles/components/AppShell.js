@@ -26,7 +26,7 @@ export default function AppShell({ children }) {
 
       {/* Single toggle tab — always fixed at the sidebar boundary */}
       <button
-        className="sidebar-toggle-tab"
+        className="sidebar-toggle-tab no-print"
         onClick={toggleSidebar}
         aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}

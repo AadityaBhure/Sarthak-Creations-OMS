@@ -50,23 +50,23 @@ export async function PATCH(request, { params }) {
           if (newExec) newName = newExec.first_name;
         }
 
-        // Append to existing remark, chaining the history
-        let existingRemark = updates.remark !== undefined ? updates.remark : (currentOrder.remark || '');
+        // Append to existing assignment_history, chaining the history
+        let existingHistory = currentOrder.assignment_history || '';
         
         const assignmentRegex = /\[Assignment:\s*(.*?)\]/g;
         let match;
         let lastMatch = null;
-        while ((match = assignmentRegex.exec(existingRemark)) !== null) {
+        while ((match = assignmentRegex.exec(existingHistory)) !== null) {
           lastMatch = match;
         }
 
         if (lastMatch) {
           const content = lastMatch[1];
           const newBlock = `[Assignment: ${content} -> ${newName}]`;
-          updates.remark = existingRemark.substring(0, lastMatch.index) + newBlock + existingRemark.substring(lastMatch.index + lastMatch[0].length);
+          updates.assignment_history = existingHistory.substring(0, lastMatch.index) + newBlock + existingHistory.substring(lastMatch.index + lastMatch[0].length);
         } else {
           const assignmentRemark = `[Assignment: ${oldName} -> ${newName}]`;
-          updates.remark = existingRemark ? existingRemark + '\n' + assignmentRemark : assignmentRemark;
+          updates.assignment_history = existingHistory ? existingHistory + '\n' + assignmentRemark : assignmentRemark;
         }
       }
     }
@@ -83,7 +83,7 @@ export async function PATCH(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       const changes = {};
       
       if (currentOrder) {
@@ -96,7 +96,8 @@ export async function PATCH(request, { params }) {
           'Client': currentOrder.clients?.name || 'Unknown',
           'Product': currentOrder.product_names?.name || 'Unknown',
           'Assigned Executive': currentOrder.users ? `${currentOrder.users.first_name} ${currentOrder.users.last_name || ''}`.trim() : 'Unassigned',
-          'Remarks': currentOrder.remark
+          'Remarks': currentOrder.remark,
+          'Assignment History': currentOrder.assignment_history
         };
 
         // Build "New" map resolved to human readable names
@@ -107,6 +108,7 @@ export async function PATCH(request, { params }) {
         if (updates.target_date !== undefined) newMap['Target Date'] = updates.target_date;
         if (updates.quantity !== undefined) newMap['Quantity'] = updates.quantity;
         if (updates.remark !== undefined) newMap['Remarks'] = updates.remark;
+        if (updates.assignment_history !== undefined) newMap['Assignment History'] = updates.assignment_history;
 
         // Resolve new IDs to names if they changed
         if (updates.client_id && updates.client_id !== currentOrder.client_id) {
@@ -136,8 +138,8 @@ export async function PATCH(request, { params }) {
 
       if (Object.keys(changes).length > 0) {
         await logActivity({
-          userId: payload.userId,
-          username: payload.username,
+          userId: payload.userId || null,
+          username: payload.username || 'Admin',
           action: 'UPDATE',
           module: currentOrder?.status === 'Completed' ? 'Completed Orders' : 'Active Orders',
           recordId: id,
@@ -189,10 +191,10 @@ export async function DELETE(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'DELETE',
         module: order?.status === 'Completed' ? 'Completed Orders' : 'Active Orders',
         recordId: id,

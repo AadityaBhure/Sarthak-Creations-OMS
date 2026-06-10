@@ -66,11 +66,11 @@ export async function POST(request, { params }) {
     const cookieStore = await cookies();
     const token = cookieStore.get('session')?.value;
     const payload = token ? await verifyToken(token) : null;
-    if (payload?.userId) {
+    if (payload && (payload.userId || payload.role === 'admin')) {
       let identifier = originalRecord.name || originalRecord.po_number || originalRecord.first_name || 'Unknown Item';
       await logActivity({
-        userId: payload.userId,
-        username: payload.username,
+        userId: payload.userId || null,
+        username: payload.username || 'Admin',
         action: 'RESTORE',
         module: 'Deleted Records',
         recordId: id,
