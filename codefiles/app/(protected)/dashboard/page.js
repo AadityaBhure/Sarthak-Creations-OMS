@@ -52,8 +52,6 @@ export default async function DashboardPage() {
   const { count: productsCount } = await supabase.from('product_names').select('*', { count: 'exact', head: true });
   const { count: typesCount } = await supabase.from('product_types').select('*', { count: 'exact', head: true });
 
-  // 4. Count Deleted Records (Recycle Bin)
-  const { count: deletedCount } = await supabase.from('deleted_orders').select('*', { count: 'exact', head: true });
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -134,16 +132,6 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* SECTION 3: Recycle Bin Metrics */}
-      <section>
-        <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>Recycle Bin</h2>
-        <Link href="/deleted-orders" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className="dash-card clickable" style={{ maxWidth: '300px' }}>
-            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>Deleted Records Held</div>
-            <div style={{ fontSize: '28px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: 1 }}>{deletedCount || 0}</div>
-          </div>
-        </Link>
-      </section>
 
     </div>
   );
