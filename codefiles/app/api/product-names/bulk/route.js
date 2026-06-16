@@ -3,6 +3,9 @@ import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 import { logActivity } from '@/lib/logger';
+
+// DELETE multiple product names in one DB call
+export async function POST(request) {
   try {
     const { ids } = await request.json();
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
