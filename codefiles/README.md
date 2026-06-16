@@ -175,6 +175,12 @@ Every serverless API route natively wraps its operations in the `logActivity` ut
 - **3-Part Relational Filtering:** Users can stack infinite filters using the `[Field] [Operator] [Value]` paradigm. Example: `(Status IS "Printing") AND (Quantity GREATER THAN 5000)`.
 - **Quick Views (Saved Views):** Complex filter setups, along with specific column visibilities and sorting parameters, can be saved to the database as a "Quick View". Users can bounce between their customized views with a single click in the top toolbar.
 
+### Safe Bulk Imports (Excel/CSV)
+
+- **Batched Processing:** Uploads of thousands of rows are processed in chunks of 200 via the backend, guaranteeing the browser never freezes.
+- **Strict Duplicate Prevention:** The database actively intercepts duplicates based on unique identifiers and silently skips them to maintain data integrity.
+- **Interactive Import Summaries:** After importing, a modal presents exact totals of accepted vs. rejected rows. Users can click to see a detailed table of exactly why each rejected row failed (e.g., "Duplicate entry", "Invalid format").
+
 ### Export, PDF, and Smart Print
 
 - **Bulk Export:** The system integrates `PapaParse` to instantly stream selected rows to a cleanly formatted `.csv` file. 
@@ -186,6 +192,7 @@ Every serverless API route natively wraps its operations in the `logActivity` ut
 The `/settings` dashboard is restricted to Admin users. It allows for:
 - **Status Pipeline Customization:** A drag-and-drop interface to add new statuses, reorder the operational pipeline, and assign custom hexadecimal colors to the status badges.
 - **Global Print Overrides:** Uploading company headers and configuring the precise address blocks that appear on exported PDFs.
+- **Adaptive UI Density:** Users can toggle between *Comfortable* (spacious) and *Compact* (data-dense) table rendering, dynamically updating globally without a page reload.
 
 ---
 

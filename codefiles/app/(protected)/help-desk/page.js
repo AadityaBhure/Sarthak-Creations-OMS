@@ -85,7 +85,7 @@ export default function HelpDeskPage() {
         {/* Section 3: Bulk Uploads (CSV Import) */}
         <section>
           <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
-            3. Bulk Uploads (CSV Import)
+            3. Bulk Uploads (Excel/CSV Import)
           </h3>
           <table className="data-table" style={{ width: '100%', marginBottom: '16px' }}>
             <thead>
@@ -102,19 +102,60 @@ export default function HelpDeskPage() {
                 </td>
               </tr>
               <tr>
-                <td><strong>Duplicate Prevention</strong></td>
+                <td><strong>Strict Duplicate Prevention</strong></td>
                 <td>
-                  During a CSV import, the database checks every single record against existing active records. If an exact match (e.g., duplicate Product List) is found, the system simply skips it and imports the rest. It will not create duplicates.
+                  During an import, the database checks every single row against existing active records. If an exact match (e.g., duplicate Client Name) is found, the system skips it. It will absolutely not create duplicates.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Interactive Summary & Rejection Reasons</strong></td>
+                <td>
+                  After an import finishes, you receive a detailed summary of Exactly how many rows were <strong>Accepted</strong> and <strong>Rejected</strong>. You can click on the Rejected tab to see a detailed table outlining exactly which rows failed and a specific <strong>Rejection Reason</strong> (e.g., "Duplicate entry", "Missing Required Name") so you know exactly how to fix your spreadsheet.
                 </td>
               </tr>
             </tbody>
           </table>
         </section>
 
-        {/* Section 4: Real-time Syncing & Safety */}
+        {/* Section 4: Data Formatting & UI Rules */}
         <section>
           <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
-            4. Live Data & Multi-User Safety
+            4. Data Formatting & UI Rules
+          </h3>
+          <table className="data-table" style={{ width: '100%', marginBottom: '16px' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '25%' }}>Rule</th>
+                <th style={{ width: '75%' }}>How it Works</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Global Date Formatting</strong></td>
+                <td>
+                  Regardless of what web browser or operating system you use, all dates across the entire application (Tables, PDF exports, Logs) are strictly forced into the standard <strong>DD/MM/YYYY</strong> format.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Indian Number Formatting</strong></td>
+                <td>
+                  Whenever you type a numeric quantity, the system automatically formats it in real-time using the Indian numbering system (e.g., <code>1,00,000</code>). Non-numeric text is silently stripped to prevent errors, keeping your data perfectly clean.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Adaptive Table Density</strong></td>
+                <td>
+                  In your Settings, you can switch between <strong>Comfortable</strong> (spacious rows) and <strong>Compact</strong> (highly packed rows). This lets you see more data on smaller laptop screens without needing to zoom out.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        {/* Section 5: Real-time Syncing & Safety */}
+        <section>
+          <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
+            5. Live Data & Multi-User Safety
           </h3>
           <table className="data-table" style={{ width: '100%', marginBottom: '16px' }}>
             <thead>
@@ -140,10 +181,10 @@ export default function HelpDeskPage() {
           </table>
         </section>
 
-        {/* Section 5: System Auditing & Activity Logs */}
+        {/* Section 6: System Auditing & Activity Logs */}
         <section>
           <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
-            5. System Auditing & Activity Logs
+            6. System Auditing & Activity Logs
           </h3>
           <table className="data-table" style={{ width: '100%', marginBottom: '16px' }}>
             <thead>
