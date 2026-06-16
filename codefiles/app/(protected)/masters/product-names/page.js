@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 import ExcelImportModal from '@/components/excel/ExcelImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
@@ -12,6 +13,8 @@ export default function ProductNamesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { settings, loading: settingsLoading } = useGlobalSettings();
+  const [clients, setClients] = useState([]);
+  const [newClientId, setNewClientId] = useState(null);
   
   // Search
   const [search, setSearch] = useState('');
@@ -71,10 +74,21 @@ export default function ProductNamesList() {
   async function fetchProducts(showLoader = true) {
     if (showLoader) setLoading(true);
     try {
-      const res = await fetch('/api/product-names');
-      if (!res.ok) throw new Error('Failed to fetch product names');
+      const [res, cliRes] = await Promise.all([
+        fetch('/api/product-names'),
+        fetch('/api/clients')
+      ]);
+      if (!res.ok) throw new Error('Failed to fetch product lists');
       const data = await res.json();
       setProducts(data);
+      if (cliRes.ok) {
+        const cliData = await cliRes.json();
+        const clientOptions = cliData.map(c => ({ value: c.id, label: c.name }));
+        setClients([
+          { value: 'no_client', label: 'No clients added', isSpecial: true },
+          ...clientOptions
+        ]);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -92,7 +106,7 @@ export default function ProductNamesList() {
       const res = await fetch('/api/product-names', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({ name: newName, client_id: newClientId }),
       });
 
       const data = await res.json();
@@ -101,6 +115,7 @@ export default function ProductNamesList() {
       setProducts((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setShowModal(false);
       setNewName('');
+      setNewClientId(null);
     } catch (err) {
       setModalError(err.message);
     } finally {
@@ -179,18 +194,18 @@ export default function ProductNamesList() {
   }
 
   // --- INLINE EDIT LOGIC ---
-  function handleCellChange(id, value) {
+  function handleCellChange(id, field, value) {
     setPendingEdits((prev) => ({
       ...prev,
-      [id]: { name: value }
+      [id]: { ...(prev[id] || {}), [field]: value }
     }));
   }
 
-  function getDisplayValue(product) {
-    if (pendingEdits[product.id] && pendingEdits[product.id].name !== undefined) {
-      return pendingEdits[product.id].name;
+  function getDisplayValue(product, field = 'name') {
+    if (pendingEdits[product.id] && pendingEdits[product.id][field] !== undefined) {
+      return pendingEdits[product.id][field];
     }
-    return product.name;
+    return product[field];
   }
 
   function hasPendingEdits() {
@@ -229,10 +244,22 @@ export default function ProductNamesList() {
   function discardEdits() {
     setPendingEdits({});
   }
+  const [selectedClientFilter, setSelectedClientFilter] = useState(null);
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    
+    let matchClient = true;
+    if (selectedClientFilter) {
+      if (selectedClientFilter.value === 'no_client') {
+        matchClient = !p.client_id;
+      } else {
+        matchClient = p.client_id === selectedClientFilter.value;
+      }
+    }
+    
+    return matchSearch && matchClient;
+  });
 
   const totalFiltered = filteredProducts.length;
   const paginatedProducts = filteredProducts.slice((page - 1) * limit, page * limit);
@@ -242,10 +269,10 @@ export default function ProductNamesList() {
 
   return (
     <div className="masters-page">
-      <div className="toolbar" style={{ justifyContent: 'space-between' }}>
+      <div className="toolbar" style={{ justifyContent: 'space-between', marginBottom: '16px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            + Add Product Name
+            + Add Product List
           </button>
           <button className="btn btn-secondary" onClick={() => setShowCsvModal(true)}>
             Import Excel
@@ -257,6 +284,32 @@ export default function ProductNamesList() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
+          <div style={{ width: '220px' }}>
+            <Select 
+              instanceId="toolbar-client-filter"
+              options={clients} 
+              isClearable 
+              placeholder="Filter by Client..." 
+              value={selectedClientFilter}
+              onChange={(opt) => { setSelectedClientFilter(opt); setPage(1); }}
+              styles={{ 
+                control: (base) => ({ ...base, minHeight: '36px', height: '36px', fontSize: '13px' }),
+                menu: (base) => ({ ...base, zIndex: 9999 }),
+                option: (base, { data, isFocused, isSelected }) => {
+                  if (data.isSpecial) {
+                    return {
+                      ...base,
+                      backgroundColor: isFocused ? '#e2e8f0' : '#f0f2f5',
+                      color: 'var(--text)',
+                      fontWeight: '600',
+                      borderBottom: '1px solid var(--border)'
+                    };
+                  }
+                  return base;
+                }
+              }}
+            />
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -300,21 +353,22 @@ export default function ProductNamesList() {
               <th style={{ width: '40px' }}>
                 <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
               </th>
-              <th style={{ width: '10%' }}>Sr. No.</th>
-              <th style={{ width: '65%' }}>Product Name</th>
-              <th style={{ width: '20%' }}>Actions</th>
+              <th style={{ width: '8%' }}>Sr. No.</th>
+              <th style={{ width: '40%' }}>Product List</th>
+              <th style={{ width: '40%' }}>Client Name</th>
+              <th style={{ width: '12%' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && products.length === 0 ? (
               <tr>
-                <td colSpan="3" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                   Loading product names...
                 </td>
               </tr>
             ) : filteredProducts.length === 0 ? (
               <tr>
-                <td colSpan="3" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                   No product names found.
                 </td>
               </tr>
@@ -327,17 +381,32 @@ export default function ProductNamesList() {
                       onClick={e => e.stopPropagation()} />
                   </td>
                   <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * limit + index + 1}</td>
-                  <td className={pendingEdits[product.id] !== undefined ? 'cell-edited' : ''}>
+                  <td className={pendingEdits[product.id]?.name !== undefined ? 'cell-edited' : ''}>
                     {isEditable ? (
                       <input
                         type="text"
                         className="form-input"
-                        value={getDisplayValue(product)}
-                        onChange={(e) => handleCellChange(product.id, e.target.value)}
+                        value={getDisplayValue(product, 'name')}
+                        onChange={(e) => handleCellChange(product.id, 'name', e.target.value)}
                         style={{ padding: '4px 6px', fontSize: '13px' }}
                       />
                     ) : (
                       product.name
+                    )}
+                  </td>
+                  <td className={pendingEdits[product.id]?.client_id !== undefined ? 'cell-edited' : ''}>
+                    {isEditable ? (
+                      <Select 
+                        instanceId={`client-${product.id}`} 
+                        options={clients} 
+                        value={clients.find(c => c.value === getDisplayValue(product, 'client_id'))} 
+                        onChange={val => handleCellChange(product.id, 'client_id', val?.value ?? null)} 
+                        menuPortalTarget={typeof window !== 'undefined' ? document.body : null} 
+                        styles={{ control: base => ({ ...base, minHeight: '32px', height: '32px', fontSize: '13px' }) }} 
+                        isClearable 
+                      />
+                    ) : (
+                      product.clients?.name || <span style={{ color: 'var(--text-muted)' }}>No Client</span>
                     )}
                   </td>
                   <td>
@@ -397,16 +466,29 @@ export default function ProductNamesList() {
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>Add Product Name</h3>
+            <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>Add Product List</h3>
             
             {modalError && <div className="form-error" style={{ marginBottom: '12px' }}>{modalError}</div>}
             
             <form onSubmit={handleAdd}>
               <div className="form-group" style={{ marginBottom: '20px' }}>
                 <label className="form-label" htmlFor="new-name">
-                  Product Name <span className="required">*</span>
+                  Product List <span className="required">*</span>
                 </label>
-                <input
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label className="form-label" htmlFor="new-client">
+                  Client Name (Optional)
+                </label>
+                <Select 
+                  instanceId="new-client" 
+                  options={clients} 
+                  value={clients.find(c => c.value === newClientId)} 
+                  onChange={val => setNewClientId(val?.value ?? null)} 
+                  isClearable 
+                  placeholder="Select Client..." 
+                />
+              </div>
+              <input
                   id="new-name"
                   type="text"
                   className="form-input"
@@ -435,19 +517,18 @@ export default function ProductNamesList() {
       <ExcelImportModal 
         isOpen={showCsvModal} 
         onClose={() => setShowCsvModal(false)} 
-        entityName="Product Names" 
+        entityName="Product Lists" 
         importEndpoint="/api/product-names/import"
-        columnMap={{ 'product name': 'name' }}
-        uniqueColumnDisplay="product name"
+        columnMap={{ 'product list': 'name', 'client name': 'client_name' }}
+        uniqueColumnDisplay="product list"
         onSuccess={() => {
           fetchProducts();
-          setShowCsvModal(false);
         }}
       />
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
-        title="Delete Product Name"
+        title="Delete Product List"
         message={`Are you sure you want to delete "${confirmModal.name}"?\nIt will be safely moved to the Recycle Bin.`}
         confirmText="Delete" confirmColor="danger"
         onConfirm={handleDelete}
@@ -455,7 +536,7 @@ export default function ProductNamesList() {
       />
       <ConfirmModal
         isOpen={bulkDelConfirm}
-        title="Delete Selected Product Names"
+        title="Delete Selected Product Lists"
         message={`Delete ${selectedCount} selected product names? They will be moved to the Recycle Bin.`}
         confirmText="Delete All" confirmColor="danger"
         onConfirm={handleBulkDelete}

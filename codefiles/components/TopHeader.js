@@ -9,7 +9,7 @@ const PAGE_TITLES = {
   '/orders/completed':       'Completed Orders',
   '/orders/new':             'New Order',
   '/masters/clients':        'Client List',
-  '/masters/product-names':  'Product Names',
+  '/masters/product-names':  'Product Lists',
   '/masters/product-types':  'Product Types',
   '/masters/deleted':        'Deleted Records',
   '/settings':               'Settings',

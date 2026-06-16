@@ -523,7 +523,6 @@ export default function ClientList() {
         uniqueColumnDisplay="client name"
         onSuccess={() => {
           fetchClients();
-          setShowCsvModal(false);
         }}
       />
 

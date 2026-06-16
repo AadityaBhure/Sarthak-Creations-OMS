@@ -8,7 +8,7 @@ import { useGlobalSettings } from '@/components/SettingsProvider';
 
 const TABS = [
   { id: 'deleted_clients', label: 'Clients' },
-  { id: 'deleted_product_names', label: 'Product Names' },
+  { id: 'deleted_product_names', label: 'Product Lists' },
   { id: 'deleted_product_types', label: 'Product Types' },
   { id: 'deleted_orders', label: 'Orders' },
 ];
@@ -242,7 +242,7 @@ export default function RecycleBin() {
           <th style={{ width: '90px' }}>DDE</th>
           <th style={{ width: '100px' }}>PO Number</th>
           <th style={{ width: '140px' }}>Client</th>
-          <th style={{ width: '120px' }}>Product Name</th>
+          <th style={{ width: '120px' }}>Product List</th>
           <th style={{ width: '120px' }}>Product Type</th>
           <th style={{ width: '60px' }}>Qty</th>
           <th style={{ width: '130px' }}>Status</th>
@@ -303,7 +303,7 @@ export default function RecycleBin() {
         
         {activeTab === 'deleted_orders' ? (
           <>
-            <td>{new Date(record.date_of_entry).toLocaleDateString()}</td>
+            <td>{new Date(record.date_of_entry).toLocaleDateString('en-GB')}</td>
             <td><strong>{record.po_number}</strong></td>
             <td>{masterMaps.clients[record.client_id] || 'Unknown'}</td>
             <td>{masterMaps.productNames[record.product_name_id] || 'Unknown'}</td>
@@ -322,7 +322,7 @@ export default function RecycleBin() {
           </td>
         )}
 
-        <td>{new Date(record.deleted_at).toLocaleString()}</td>
+        <td>{new Date(record.deleted_at).toLocaleString('en-GB')}</td>
         <td style={{ color: 'var(--status-amber-text)' }}>
           {getDaysLeft(record.deleted_at)}
         </td>
@@ -468,3 +468,4 @@ export default function RecycleBin() {
     </div>
   );
 }
+

@@ -122,7 +122,7 @@ export default async function DashboardPage() {
             <div style={{ fontSize: '28px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: 1 }}>{clientsCount || 0}</div>
           </div>
           <div className="dash-card">
-            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>Registered Product Names</div>
+            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>Registered Product Lists</div>
             <div style={{ fontSize: '28px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: 1 }}>{productsCount || 0}</div>
           </div>
           <div className="dash-card">

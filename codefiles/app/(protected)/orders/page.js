@@ -143,7 +143,7 @@ function ActiveOrdersPage() {
   }, []);
 
   useEffect(() => {
-    setPrintDate(new Date().toLocaleString());
+    setPrintDate(new Date().toLocaleString('en-GB'));
     fetchMasters();
     fetchQuickViews();
     const supabase = createBrowserClient();
@@ -281,7 +281,7 @@ function ActiveOrdersPage() {
       headers.join(','),
       ...rows.map((o, i) => [
         i + 1,
-        new Date(o.date_of_entry).toLocaleDateString(),
+        new Date(o.date_of_entry).toLocaleDateString('en-GB'),
         `"${o.po_number || ''}"`,
         `"${o.clients?.name || ''}"`,
         `"${o.product_names?.name || ''}"`,
@@ -325,7 +325,7 @@ function ActiveOrdersPage() {
       head: [['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remarks', 'In-Charge']],
       body: rows.map((o, i) => [
         i + 1,
-        new Date(o.date_of_entry).toLocaleDateString(),
+        new Date(o.date_of_entry).toLocaleDateString('en-GB'),
         o.po_number || '',
         o.clients?.name || '',
         o.product_names?.name || '',
@@ -449,8 +449,12 @@ function ActiveOrdersPage() {
   async function saveAllEdits() {
     setSaving(true);
     let errorCount = 0;
-    for (const [id, changes] of Object.entries(pendingEdits)) {
+    for (const [id, rawChanges] of Object.entries(pendingEdits)) {
       try {
+        const changes = { ...rawChanges };
+        if (changes.quantity !== undefined) {
+          changes.quantity = parseInt(String(changes.quantity).replace(/,/g, ''), 10) || 0;
+        }
         const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
         if (!res.ok) throw new Error('Failed to update');
       } catch (err) { showAlert('Error', `Error updating order: ${err.message}`); errorCount++; }
@@ -474,7 +478,7 @@ function ActiveOrdersPage() {
   }
 
   const tblSelectStyles = {
-    control: base => ({ ...base, minWidth: '200px', minHeight: '32px', height: '32px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'none' }),
+    control: base => ({ ...base, minWidth: '100%', minHeight: '32px', height: '32px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'none' }),
     menu: base => ({ ...base, backgroundColor: 'var(--bg-surface)', zIndex: 9999 }),
     option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? 'var(--table-row-hover)' : 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }),
     singleValue: base => ({ ...base, color: 'var(--text-primary)' }),
@@ -676,7 +680,7 @@ function ActiveOrdersPage() {
 
                     {visibleCols.has('date_of_entry') && (
                       <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString()}
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString('en-GB')}
                       </td>
                     )}
                     {visibleCols.has('po_number') && (
@@ -701,12 +705,16 @@ function ActiveOrdersPage() {
                     )}
                     {visibleCols.has('quantity') && (
                       <td className={pendingEdits[order.id]?.quantity !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="number" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '90px' }} value={qtyVal || ''} onChange={e => handleCellChange(order.id, 'quantity', e.target.value)} /> : (qtyVal != null ? new Intl.NumberFormat('en-IN').format(qtyVal) : '')}
+                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '90px' }} value={qtyVal || ''} onChange={e => {
+                          const rawVal = e.target.value.replace(/[^0-9]/g, '');
+                          if (!rawVal) { handleCellChange(order.id, 'quantity', ''); return; }
+                          handleCellChange(order.id, 'quantity', Number(rawVal).toLocaleString('en-IN'));
+                        }} /> : (qtyVal != null ? new Intl.NumberFormat('en-IN').format(qtyVal) : '')}
                       </td>
                     )}
                     {visibleCols.has('target_date') && (
                       <td className={pendingEdits[order.id]?.target_date !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '110px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString() : '')}
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '110px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString('en-GB') : '')}
                       </td>
                     )}
                     {visibleCols.has('age') && (
@@ -715,9 +723,24 @@ function ActiveOrdersPage() {
                       </td>
                     )}
                     {visibleCols.has('status') && (
-                      <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <Select options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal)} onChange={val => handleCellChange(order.id, 'status', val ? val.value : null)} /> : <span className="status-badge" style={getStatusStyle(statusVal)}>{statusVal}</span>}
-                    </td>
+                      <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''} style={{ padding: '4px' }}>
+                        {/* Always editable status cell, styled like a badge */}
+                        <Select 
+                          options={STATUS_OPTIONS} 
+                          styles={{
+                            ...tblSelectStyles,
+                            control: base => ({ ...base, minWidth: '140px', minHeight: '26px', height: '26px', fontSize: '12px', fontWeight: '600', backgroundColor: getStatusStyle(statusVal).backgroundColor, borderColor: 'transparent', borderRadius: '12px', cursor: 'pointer', boxShadow: 'none' }),
+                            singleValue: base => ({ ...base, color: getStatusStyle(statusVal).color }),
+                            valueContainer: base => ({ ...base, padding: '0px 8px', height: '24px' }),
+                            indicatorsContainer: base => ({ ...base, height: '24px' }),
+                            dropdownIndicator: base => ({ ...base, padding: '0px 4px', color: getStatusStyle(statusVal).color, '&:hover': { color: getStatusStyle(statusVal).color } }),
+                            indicatorSeparator: () => ({ display: 'none' })
+                          }} 
+                          menuPortalTarget={typeof window !== 'undefined' ? document.body : null} 
+                          value={STATUS_OPTIONS.find(c => c.value === statusVal)} 
+                          onChange={val => handleCellChange(order.id, 'status', val ? val.value : null)} 
+                        />
+                      </td>
                     )}
                     {visibleCols.has('executive') && (
                       <td className={pendingEdits[order.id]?.executive_id !== undefined ? 'cell-edited' : ''}>
@@ -824,3 +847,4 @@ function ActiveOrdersPage() {
     </div>
   );
 }
+

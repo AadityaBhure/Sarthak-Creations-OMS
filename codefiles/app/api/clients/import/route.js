@@ -12,39 +12,66 @@ export async function POST(request) {
     }
 
     // Clean data
-    const validRows = rows
-      .map(row => ({
-        name: row.name ? String(row.name).trim() : '',
-        contact_person: row.contact_person ? String(row.contact_person).trim() : null,
-        phone_number: row.phone_number ? String(row.phone_number).trim() : null
-      }))
-      .filter(row => row.name !== '');
-
-    if (validRows.length === 0) {
-      return NextResponse.json({ error: 'No valid rows found in the CSV.' }, { status: 400 });
-    }
+    const cleanedRows = rows.map(row => ({
+      name: row.name ? String(row.name).trim() : '',
+      contact_person: row.contact_person ? String(row.contact_person).trim() : null,
+      phone_number: row.phone_number ? String(row.phone_number).trim() : null
+    }));
 
     const supabase = createServerClient();
 
-    // Split into chunks and upsert each batch
+    // Fetch existing clients to check for duplicates
+    const { data: existingClients, error: existingError } = await supabase
+      .from('clients')
+      .select('name');
+    
+    if (existingError) throw existingError;
+
+    const existingSet = new Set(existingClients.map(c => c.name.toLowerCase()));
+
+    const recordsToInsert = [];
+    const skippedRows = [];
+    const insertedRows = [];
+
+    cleanedRows.forEach(row => {
+      if (!row.name) {
+        skippedRows.push({ ...row, reason: 'Missing name' });
+        return;
+      }
+
+      const nameLower = row.name.toLowerCase();
+      
+      if (!existingSet.has(nameLower)) {
+        recordsToInsert.push(row);
+        existingSet.add(nameLower); // prevent duplicates within the same import file
+      } else {
+        skippedRows.push({ ...row, reason: 'Duplicate client name' });
+      }
+    });
+
     let totalInserted = 0;
-    for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
-      const batch = validRows.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
-        .from('clients')
-        .upsert(batch, { onConflict: 'name', ignoreDuplicates: true })
-        .select();
+    if (recordsToInsert.length > 0) {
+      for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
+        const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
+        const { data, error } = await supabase
+          .from('clients')
+          .insert(batch)
+          .select();
 
-      if (error) throw error;
-      totalInserted += data ? data.length : 0;
+        if (error) throw error;
+        if (data) {
+          totalInserted += data.length;
+          insertedRows.push(...data);
+        }
+      }
     }
-
-    const skippedCount = validRows.length - totalInserted;
 
     return NextResponse.json({
       success: true,
       inserted: totalInserted,
-      skipped: skippedCount
+      skipped: skippedRows.length,
+      insertedRows: insertedRows,
+      skippedRows: skippedRows
     });
 
   } catch (error) {

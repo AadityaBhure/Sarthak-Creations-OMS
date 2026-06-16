@@ -4,19 +4,30 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 import { logActivity } from '@/lib/logger';
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const clientIdFilter = searchParams.get('client_id');
+
     const supabase = createServerClient();
     let allData = [];
     let page = 0;
     const limit = 1000;
 
     while (true) {
-      const { data, error } = await supabase
+      let query = supabase
         .from('product_names')
-        .select('*')
+        .select('*, clients(name)')
         .order('name', { ascending: true })
         .range(page * limit, (page + 1) * limit - 1);
+
+      if (clientIdFilter === 'none') {
+        query = query.is('client_id', null);
+      } else if (clientIdFilter) {
+        query = query.eq('client_id', clientIdFilter);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       
@@ -33,17 +44,17 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { name } = await request.json();
+    const { name, client_id } = await request.json();
 
     if (!name || name.trim() === '') {
-      return NextResponse.json({ error: 'Product name is required.' }, { status: 400 });
+      return NextResponse.json({ error: 'Product list name is required.' }, { status: 400 });
     }
 
     const supabase = createServerClient();
     const { data, error } = await supabase
       .from('product_names')
-      .insert([{ name: name.trim() }])
-      .select()
+      .insert([{ name: name.trim(), client_id: client_id || null }])
+      .select('*, clients(name)')
       .single();
 
     if (error) {
@@ -61,9 +72,9 @@ export async function POST(request) {
         userId: payload.userId || null,
         username: payload.username || 'Admin',
         action: 'CREATE',
-        module: 'Product Names',
+        module: 'Product Lists',
         recordId: data.id,
-        details: { 'Product Name': data.name }
+        details: { 'Product List': data.name }
       });
     }
 

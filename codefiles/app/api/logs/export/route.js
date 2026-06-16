@@ -74,7 +74,7 @@ export async function GET(request) {
       const humanReadableDesc = `${actor} ${actionName} a record in ${moduleName}.`;
 
       return {
-        'Date & Time': new Date(log.created_at).toLocaleString(),
+        'Date & Time': new Date(log.created_at).toLocaleString('en-GB'),
         'User': actor,
         'Action': log.action,
         'Module': log.module,
@@ -114,3 +114,4 @@ export async function GET(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

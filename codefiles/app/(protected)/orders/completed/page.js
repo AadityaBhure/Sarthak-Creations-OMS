@@ -118,7 +118,7 @@ function CompletedOrdersPage() {
   }, []);
 
   useEffect(() => {
-    setPrintDate(new Date().toLocaleString());
+    setPrintDate(new Date().toLocaleString('en-GB'));
     fetchMasters();
     fetchQuickViews();
     const supabase = createBrowserClient();
@@ -261,7 +261,7 @@ function CompletedOrdersPage() {
     const csvRows = [
       headers.join(','),
       ...rows.map((o, i) => [
-        i + 1, new Date(o.date_of_entry).toLocaleDateString(), `"${o.po_number || ''}"`,
+        i + 1, new Date(o.date_of_entry).toLocaleDateString('en-GB'), `"${o.po_number || ''}"`,
         `"${o.clients?.name || ''}"`, `"${o.product_names?.name || ''}"`, `"${o.product_types?.name || ''}"`,
         o.quantity != null ? `"${new Intl.NumberFormat('en-IN').format(o.quantity)}"` : '', calcDaysOld(o.date_of_entry), `"${o.status || ''}"`, `"${(o.remark || '').replace(/"/g, '""')}"`, `"${(o.assignment_history || '').replace(/"/g, '""')}"`
       ].join(','))
@@ -291,7 +291,7 @@ function CompletedOrdersPage() {
     autoTable(doc, {
       startY: address ? 35 : 30,
       head: [['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remarks', 'In-Charge']],
-      body: rows.map((o, i) => [i + 1, new Date(o.date_of_entry).toLocaleDateString(), o.po_number || '',
+      body: rows.map((o, i) => [i + 1, new Date(o.date_of_entry).toLocaleDateString('en-GB'), o.po_number || '',
         o.clients?.name || '', o.product_names?.name || '', o.product_types?.name || '',
         o.quantity != null ? new Intl.NumberFormat('en-IN').format(o.quantity) : '', `${calcDaysOld(o.date_of_entry)}d`, o.status || '', o.remark || '', o.assignment_history || '']),
       styles: { fontSize: 8 }, headStyles: { fillColor: [30, 30, 30] }
@@ -598,7 +598,7 @@ function CompletedOrdersPage() {
 
                     {visibleCols.has('date_of_entry') && (
                       <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString()}
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString('en-GB')}
                       </td>
                     )}
                     {visibleCols.has('po_number') && (
@@ -628,7 +628,7 @@ function CompletedOrdersPage() {
                     )}
                     {visibleCols.has('target_date') && (
                       <td className={pendingEdits[order.id]?.target_date !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '110px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString() : '')}
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '110px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString('en-GB') : '')}
                       </td>
                     )}
                     {visibleCols.has('age') && (
@@ -637,8 +637,23 @@ function CompletedOrdersPage() {
                       </td>
                     )}
                     {visibleCols.has('status') && (
-                      <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <Select instanceId={`c-status-${order.id}`} options={STATUS_OPTIONS} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={STATUS_OPTIONS.find(c => c.value === statusVal) || { value: statusVal, label: statusVal }} onChange={val => handleCellChange(order.id, 'status', val?.value ?? null)} /> : <span className="status-badge" style={getStatusStyle(statusVal)}>{statusVal}</span>}
+                      <td className={pendingEdits[order.id]?.status !== undefined ? 'cell-edited' : ''} style={{ padding: '4px' }}>
+                        <Select 
+                          instanceId={`c-status-${order.id}`} 
+                          options={STATUS_OPTIONS} 
+                          styles={{
+                            ...tblSelectStyles,
+                            control: base => ({ ...base, minWidth: '140px', minHeight: '26px', height: '26px', fontSize: '12px', fontWeight: '600', backgroundColor: getStatusStyle(statusVal).backgroundColor, borderColor: 'transparent', borderRadius: '12px', cursor: 'pointer', boxShadow: 'none' }),
+                            singleValue: base => ({ ...base, color: getStatusStyle(statusVal).color }),
+                            valueContainer: base => ({ ...base, padding: '0px 8px', height: '24px' }),
+                            indicatorsContainer: base => ({ ...base, height: '24px' }),
+                            dropdownIndicator: base => ({ ...base, padding: '0px 4px', color: getStatusStyle(statusVal).color, '&:hover': { color: getStatusStyle(statusVal).color } }),
+                            indicatorSeparator: () => ({ display: 'none' })
+                          }} 
+                          menuPortalTarget={typeof window !== 'undefined' ? document.body : null} 
+                          value={STATUS_OPTIONS.find(c => c.value === statusVal) || { value: statusVal, label: statusVal }} 
+                          onChange={val => handleCellChange(order.id, 'status', val?.value ?? null)} 
+                        />
                       </td>
                     )}
                     {visibleCols.has('executive') && (
@@ -731,3 +746,4 @@ function CompletedOrdersPage() {
     </div>
   );
 }
+

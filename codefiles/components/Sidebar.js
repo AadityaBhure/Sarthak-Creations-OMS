@@ -24,7 +24,7 @@ const NAV_SECTIONS = [
     links: [
       { href: '/masters/executives', label: 'Executive List' },
       { href: '/masters/clients', label: 'Client List' },
-      { href: '/masters/product-names', label: 'Product Names' },
+      { href: '/masters/product-names', label: 'Product Lists' },
       { href: '/masters/product-types', label: 'Product Types' },
       { href: '/masters/deleted', label: 'Deleted Records' },
     ],

@@ -81,7 +81,7 @@
   --shadow-sm:  0 1px 3px rgba(0,0,0,0.08);
 
   /* TABLE DENSITY: COMFORTABLE (Default) */
-  --table-cell-pad-y: 12px;
+  --table-cell-pad-y: 14px;
   --table-cell-pad-x: 16px;
   --table-font-size: 14px;
 }
@@ -151,7 +151,7 @@
    TABLE DENSITY: COMPACT
    ==================================== */
 [data-density='compact'] {
-  --table-cell-pad-y: 6px;
+  --table-cell-pad-y: 5px;
   --table-cell-pad-x: 10px;
   --table-font-size: 13px;
 }
@@ -571,15 +571,15 @@ input, select, textarea {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--table-font-size, 14px);
 }
 
 .data-table th {
   background: var(--table-header-bg);
   color: var(--text-primary);
   font-weight: 500;
-  font-size: 13px;
-  padding: 9px 12px;
+  font-size: var(--table-font-size, 14px);
+  padding: var(--table-cell-pad-y, 12px) var(--table-cell-pad-x, 16px);
   text-align: left;
   border-bottom: 1px solid var(--table-border);
   white-space: nowrap;
@@ -595,7 +595,7 @@ input, select, textarea {
 }
 
 .data-table td {
-  padding: 8px 12px;
+  padding: var(--table-cell-pad-y, 12px) var(--table-cell-pad-x, 16px);
   border-bottom: 1px solid var(--table-border);
   color: var(--text-primary);
   vertical-align: middle;

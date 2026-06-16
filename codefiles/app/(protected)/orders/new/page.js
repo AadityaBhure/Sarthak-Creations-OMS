@@ -73,7 +73,7 @@ export default function NewOrderPage() {
         const execData = await execRes.json();
 
         setClients(clientData.map(c => ({ value: c.id, label: c.name })));
-        setProductNames(pNamesData.map(p => ({ value: p.id, label: p.name })));
+        setProductNames(pNamesData.map(p => ({ value: p.id, label: p.name, client_id: p.client_id })));
         setProductTypes(pTypesData.map(p => ({ value: p.id, label: p.name })));
         setExecutives(execData.map(e => ({ value: e.id, label: `${e.first_name} ${e.last_name} (${e.username})` })));
       } catch (err) {
@@ -90,7 +90,7 @@ export default function NewOrderPage() {
     setError('');
     
     if (!formData.client_id || !formData.product_name_id || !formData.product_type_id) {
-      setError('Please select Client, Product Name, and Product Type.');
+      setError('Please select Client, Product List, and Product Type.');
       return;
     }
 
@@ -111,7 +111,7 @@ export default function NewOrderPage() {
         client_id: formData.client_id.value,
         product_name_id: formData.product_name_id.value,
         product_type_id: formData.product_type_id.value,
-        quantity: formData.quantity,
+        quantity: parseInt(String(formData.quantity).replace(/,/g, ''), 10) || 0,
         status: formData.status.value,
         executive_id: formData.executive_id ? formData.executive_id.value : null,
         target_date: finalTargetDate || null,
@@ -241,7 +241,7 @@ export default function NewOrderPage() {
             options={clients} 
             styles={selectStyles}
             value={formData.client_id}
-            onChange={val => setFormData({ ...formData, client_id: val })}
+            onChange={val => setFormData({ ...formData, client_id: val, product_name_id: null })}
             placeholder="Search Client..."
             isClearable
           />
@@ -249,14 +249,15 @@ export default function NewOrderPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div className="form-group">
-            <label className="form-label">Product Name <span className="required">*</span></label>
+            <label className="form-label">Product List <span className="required">*</span></label>
             <Select 
-              options={productNames} 
+              options={productNames.filter(p => !p.client_id || p.client_id === formData.client_id?.value)} 
               styles={selectStyles}
               value={formData.product_name_id}
               onChange={val => setFormData({ ...formData, product_name_id: val })}
-              placeholder="Search Product Name..."
+              placeholder={formData.client_id ? "Search Product List..." : "Select Client First"}
               isClearable
+              isDisabled={!formData.client_id}
             />
           </div>
           
@@ -277,12 +278,19 @@ export default function NewOrderPage() {
           <div className="form-group">
             <label className="form-label">Quantity <span className="required">*</span></label>
             <input 
-              type="number" 
+              type="text" 
               className="form-input" 
               value={formData.quantity}
-              onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+              onChange={e => {
+                const rawVal = e.target.value.replace(/[^0-9]/g, '');
+                if (!rawVal) {
+                  setFormData({ ...formData, quantity: '' });
+                  return;
+                }
+                const formatted = Number(rawVal).toLocaleString('en-IN');
+                setFormData({ ...formData, quantity: formatted });
+              }}
               placeholder="Enter qty"
-              min="1"
               required
             />
           </div>

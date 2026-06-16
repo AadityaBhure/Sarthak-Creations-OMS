@@ -440,7 +440,6 @@ export default function ProductTypesList() {
         uniqueColumnDisplay="product type"
         onSuccess={() => {
           fetchTypes();
-          setShowCsvModal(false);
         }}
       />
 

@@ -7,10 +7,10 @@ import { logActivity } from '@/lib/logger';
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
-    const { name } = await request.json();
+    const { name, client_id } = await request.json();
 
-    if (!name || name.trim() === '') {
-      return NextResponse.json({ error: 'Product name is required.' }, { status: 400 });
+    if (name !== undefined && (!name || String(name).trim() === '')) {
+      return NextResponse.json({ error: 'Product list name is required.' }, { status: 400 });
     }
 
     const supabase = createServerClient();
@@ -18,13 +18,21 @@ export async function PATCH(request, { params }) {
     // Fetch existing product
     const { data: existingProduct } = await supabase
       .from('product_names')
-      .select('name')
+      .select('name, client_id')
       .eq('id', id)
       .single();
 
+    const updates = {};
+    if (name !== undefined) {
+      updates.name = String(name).trim();
+    }
+    if (client_id !== undefined) {
+      updates.client_id = client_id || null;
+    }
+
     const { data, error } = await supabase
       .from('product_names')
-      .update({ name: name.trim() })
+      .update(updates)
       .eq('id', id)
       .select()
       .single();
@@ -45,9 +53,9 @@ export async function PATCH(request, { params }) {
           userId: payload.userId || null,
           username: payload.username || 'Admin',
           action: 'UPDATE',
-          module: 'Product Names',
+          module: 'Product Lists',
           recordId: id,
-          details: { 'Product Name': { old: existingProduct.name, new: data.name } }
+          details: { 'Product List': { old: existingProduct.name, new: data.name } }
         });
       }
     }
@@ -87,7 +95,7 @@ export async function DELETE(request, { params }) {
       await supabase.from('deleted_product_names').delete().eq('id', id);
 
       if (deleteError.code === '23503') {
-        throw new Error('Cannot delete this Product Name because it is currently linked to an Active Order. Please delete or reassign the related active orders first.');
+        throw new Error('Cannot delete this Product List because it is currently linked to an Active Order. Please delete or reassign the related active orders first.');
       }
       throw deleteError;
     }
@@ -100,9 +108,9 @@ export async function DELETE(request, { params }) {
         userId: payload.userId || null,
         username: payload.username || 'Admin',
         action: 'DELETE',
-        module: 'Product Names',
+        module: 'Product Lists',
         recordId: id,
-        details: { 'Product Name': record.name }
+        details: { 'Product List': record.name }
       });
     }
 

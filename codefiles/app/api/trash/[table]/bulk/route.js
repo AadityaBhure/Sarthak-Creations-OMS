@@ -68,7 +68,7 @@ export async function POST(request, { params }) {
 
       let warnings = [];
       if (duplicateCount > 0) warnings.push(`${duplicateCount} skipped due to duplicate names.`);
-      if (missingMasterCount > 0) warnings.push(`${missingMasterCount} skipped due to missing Client/Product Name/Type.`);
+      if (missingMasterCount > 0) warnings.push(`${missingMasterCount} skipped due to missing Client/Product List/Type.`);
 
       return NextResponse.json({ 
         success: true, 

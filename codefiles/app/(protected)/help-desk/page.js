@@ -104,7 +104,7 @@ export default function HelpDeskPage() {
               <tr>
                 <td><strong>Duplicate Prevention</strong></td>
                 <td>
-                  During a CSV import, the database checks every single record against existing active records. If an exact match (e.g., duplicate Product Name) is found, the system simply skips it and imports the rest. It will not create duplicates.
+                  During a CSV import, the database checks every single record against existing active records. If an exact match (e.g., duplicate Product List) is found, the system simply skips it and imports the rest. It will not create duplicates.
                 </td>
               </tr>
             </tbody>

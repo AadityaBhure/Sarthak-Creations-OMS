@@ -9,6 +9,8 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [activeView, setActiveView] = useState('summary'); // 'summary', 'inserted', 'skipped'
+  const [confirmationRequest, setConfirmationRequest] = useState(null);
 
   if (!isOpen) return null;
 
@@ -89,7 +91,9 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
     reader.readAsBinaryString(file);
   }
 
-  async function handleImport() {
+
+
+  async function handleImport(force = false) {
     if (!previewData) return;
     
     setLoading(true);
@@ -99,7 +103,7 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
       const res = await fetch(importEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: previewData.mapped })
+        body: JSON.stringify({ rows: previewData.mapped, force })
       });
 
       const data = await res.json();
@@ -108,9 +112,16 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
         throw new Error(data.error || 'Failed to import records');
       }
 
+      if (data.requiresConfirmation) {
+        setConfirmationRequest(data);
+        return;
+      }
+
+      setConfirmationRequest(null);
       setResult(data);
+      setActiveView('summary');
       if (data.inserted > 0) {
-        onSuccess();
+        onSuccess(); // Trigger parent reload
       }
     } catch (err) {
       setError(err.message);
@@ -124,6 +135,7 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
     setPreviewData(null);
     setError('');
     setResult(null);
+    setActiveView('summary');
     onClose();
   }
 
@@ -132,91 +144,194 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
       <div className="modal-content" style={{ maxWidth: '600px' }}>
         <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>Import {entityName} from Excel</h3>
             
-        <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-          Upload an Excel (.xlsx, .xls) or CSV file. It must contain the following columns:
-          <br/>
-          <strong>{expectedHeaders.join(', ')}</strong>
-        </div>
-
         {!result ? (
-          <>
-            <div style={{ marginBottom: '20px' }}>
-              <input 
-                type="file" 
-                accept=".xlsx, .xls, .csv" 
-                onChange={handleFileChange}
-                className="form-input"
-                style={{ padding: '8px' }}
-              />
+          confirmationRequest ? (
+            <div style={{ padding: '16px', border: '1px solid var(--error)', borderRadius: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '24px' }}>⚠️</span>
+                <h4 style={{ margin: 0, color: 'var(--error)' }}>Missing Clients Detected</h4>
+              </div>
+              <p style={{ fontSize: '14px', marginBottom: '16px' }}>
+                {confirmationRequest.message}
+              </p>
+              <p style={{ fontSize: '14px', marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                Do you want to skip these records and import the valid ones?
+              </p>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setConfirmationRequest(null)} disabled={loading}>
+                  No, Cancel
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => handleImport(true)} 
+                  disabled={loading}
+                >
+                  {loading ? 'Importing...' : 'Yes, Import Valid Records'}
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                Upload an Excel (.xlsx, .xls) or CSV file. It must contain the following columns:
+                <br/>
+                <strong>{expectedHeaders.join(', ')}</strong>
+              </div>
 
-            {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
-
-            {previewData && (
               <div style={{ marginBottom: '20px' }}>
-                <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
-                  Preview ({previewData.display.length} rows found)
+                <input 
+                  type="file" 
+                  accept=".xlsx, .xls, .csv" 
+                  onChange={handleFileChange}
+                  className="form-input"
+                  style={{ padding: '8px' }}
+                />
+              </div>
+
+              {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
+
+              {previewData && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
+                    Preview ({previewData.display.length} rows found)
+                  </div>
+                  <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)' }}>
+                    <table className="data-table" style={{ margin: 0 }}>
+                      <thead>
+                        <tr>
+                          {expectedHeaders.map(c => <th key={c} style={{ padding: '6px 12px' }}>{c}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.display.slice(0, 50).map((row, i) => (
+                          <tr key={i}>
+                            {expectedHeaders.map(c => <td key={c} style={{ padding: '6px 12px' }}>{row[c]}</td>)}
+                          </tr>
+                        ))}
+                        {previewData.display.length > 50 && (
+                          <tr>
+                            <td colSpan={expectedHeaders.length} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                              ... and {previewData.display.length - 50} more rows
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)' }}>
+              )}
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={reset} disabled={loading}>
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => handleImport(false)} 
+                  disabled={loading || !previewData}
+                >
+                  {loading ? 'Importing...' : 'Import Valid Records'}
+                </button>
+              </div>
+            </>
+          )
+        ) : (
+          <>
+            {/* Success Results View */}
+            {activeView === 'summary' && (
+              <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                  {result.inserted > 0 ? '✅' : '⚠️'}
+                </div>
+                <h4 style={{ fontSize: '18px', marginBottom: '12px' }}>Import Complete</h4>
+                
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '20px' }}>
+                  <div 
+                    onClick={() => { if (result.insertedRows?.length) setActiveView('inserted') }}
+                    style={{ 
+                      padding: '12px', 
+                      border: '1px solid var(--border)', 
+                      borderRadius: '8px',
+                      cursor: result.insertedRows?.length ? 'pointer' : 'default',
+                      backgroundColor: 'var(--bg-secondary)',
+                      flex: 1
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--success)' }}>{result.inserted}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Accepted Records</div>
+                    {result.insertedRows?.length > 0 && <div style={{ fontSize: '11px', color: 'var(--primary)', marginTop: '4px' }}>Click to view</div>}
+                  </div>
+                  
+                  <div 
+                    onClick={() => { if (result.skippedRows?.length) setActiveView('skipped') }}
+                    style={{ 
+                      padding: '12px', 
+                      border: '1px solid var(--border)', 
+                      borderRadius: '8px',
+                      cursor: result.skippedRows?.length ? 'pointer' : 'default',
+                      backgroundColor: 'var(--bg-secondary)',
+                      flex: 1
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--error)' }}>{result.skipped}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Skipped/Rejected</div>
+                    {result.skippedRows?.length > 0 && <div style={{ fontSize: '11px', color: 'var(--primary)', marginTop: '4px' }}>Click to view</div>}
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <button className="btn btn-primary" onClick={reset}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Detailed Views */}
+            {activeView !== 'summary' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '15px' }}>
+                    {activeView === 'inserted' ? 'Accepted Records' : 'Skipped/Rejected Records'}
+                  </h4>
+                  <button className="btn btn-secondary" onClick={() => setActiveView('summary')} style={{ padding: '4px 8px', fontSize: '12px' }}>
+                    &larr; Back to Summary
+                  </button>
+                </div>
+
+                <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', marginBottom: '16px' }}>
                   <table className="data-table" style={{ margin: 0 }}>
                     <thead>
                       <tr>
                         {expectedHeaders.map(c => <th key={c} style={{ padding: '6px 12px' }}>{c}</th>)}
+                        {activeView === 'skipped' && (
+                          <th style={{ padding: '6px 12px', color: 'var(--error)' }}>Rejection Reason</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {previewData.display.slice(0, 50).map((row, i) => (
+                      {(activeView === 'inserted' ? result.insertedRows : result.skippedRows)?.map((row, i) => (
                         <tr key={i}>
-                          {expectedHeaders.map(c => <td key={c} style={{ padding: '6px 12px' }}>{row[c]}</td>)}
+                          {/* Map DB columns back to CSV header keys for display if needed, or just display raw values. 
+                              For API routes returning standard mapped objects, we can just grab values dynamically. */}
+                          {expectedHeaders.map(csvCol => {
+                            const dbCol = columnMap[csvCol];
+                            // If row has dbCol, use it. If not, try csvCol (in case the API returns raw keys).
+                            const val = row[dbCol] !== undefined ? row[dbCol] : row[csvCol];
+                            return <td key={csvCol} style={{ padding: '6px 12px' }}>{String(val || '')}</td>;
+                          })}
+                          {activeView === 'skipped' && (
+                            <td style={{ padding: '6px 12px', color: 'var(--error)', fontWeight: 'bold' }}>
+                              {row.reason || 'Unknown reason'}
+                            </td>
+                          )}
                         </tr>
                       ))}
-                      {previewData.display.length > 50 && (
-                        <tr>
-                          <td colSpan={expectedHeaders.length} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                            ... and {previewData.display.length - 50} more rows
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={reset} disabled={loading}>
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary" 
-                onClick={handleImport} 
-                disabled={loading || !previewData}
-              >
-                {loading ? 'Importing...' : 'Import Valid Records'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Success Results View */}
-            <div style={{ padding: '24px 0', textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>
-                {result.inserted > 0 ? '✅' : '⚠️'}
-              </div>
-              <h4 style={{ fontSize: '16px', marginBottom: '8px' }}>Import Complete</h4>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                <strong>{result.inserted}</strong> records imported successfully.
-              </p>
-              <p style={{ color: 'var(--text-secondary)' }}>
-                <strong>{result.skipped}</strong> records skipped (duplicates or empty).
-              </p>
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={reset}>
-                Done
-              </button>
-            </div>
           </>
         )}
       </div>
