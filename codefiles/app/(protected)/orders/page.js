@@ -587,7 +587,7 @@ function ActiveOrdersPage() {
 
       {/* Realtime banner */}
       {pendingUpdates > 0 && (
-        <div style={{ backgroundColor: 'var(--primary-color)', color: '#fff', padding: '8px 16px', borderRadius: '4px', marginBottom: '16px', cursor: 'pointer', textAlign: 'center', fontWeight: 600 }} onClick={() => fetchOrders(true)}>
+        <div style={{ backgroundColor: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)', padding: '8px 16px', borderRadius: '4px', marginBottom: '16px', cursor: 'pointer', textAlign: 'center', fontWeight: 600 }} onClick={() => fetchOrders(true)}>
           ({pendingUpdates}) updates available. Click here to refresh.
         </div>
       )}
