@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 // DELETE multiple clients in one DB call
 export async function POST(request) {
@@ -10,6 +13,14 @@ export async function POST(request) {
     }
 
     const supabase = createServerClient();
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    const loggerUser = payload && (payload.userId || payload.role === 'admin') ? {
+      userId: payload.userId || null,
+      username: payload.username || 'Admin'
+    } : null;
 
     // 1. Fetch the clients to get their data
     const { data: toDelete, error: fetchError } = await supabase
@@ -45,6 +56,19 @@ export async function POST(request) {
              await supabase.from('deleted_clients').delete().eq('id', id);
           } else {
              deletedCount++;
+             if (loggerUser) {
+               const clientToLog = toDelete?.find(c => c.id === id);
+               if (clientToLog) {
+                 await logActivity({
+                   userId: loggerUser.userId,
+                   username: loggerUser.username,
+                   action: 'DELETE',
+                   module: 'Client List',
+                   recordId: id,
+                   details: { 'Deleted Client': clientToLog.name }
+                 });
+               }
+             }
           }
         }));
         
@@ -60,6 +84,20 @@ export async function POST(request) {
         await supabase.from('deleted_clients').delete().in('id', toDelete.map(t => t.id));
       }
       throw deleteError;
+    }
+
+    // If fully successful without foreign key errors:
+    if (loggerUser && toDelete && toDelete.length > 0) {
+      for (const record of toDelete) {
+        await logActivity({
+          userId: loggerUser.userId,
+          username: loggerUser.username,
+          action: 'DELETE',
+          module: 'Client List',
+          recordId: record.id,
+          details: { 'Deleted Client': record.name }
+        });
+      }
     }
 
     return NextResponse.json({ success: true, deleted: ids.length });

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 const TABLE_MAP = {
   'deleted_clients': 'clients',
@@ -19,7 +22,21 @@ export async function POST(request, { params }) {
 
     const supabase = createServerClient();
 
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    const loggerUser = payload && (payload.userId || payload.role === 'admin') ? {
+      userId: payload.userId || null,
+      username: payload.username || 'Admin'
+    } : null;
+
     if (action === 'delete') {
+      // 1. Fetch records to know what we are deleting for the logs
+      const { data: recordsToDelete } = await supabase
+        .from(table)
+        .select('*')
+        .in('id', ids);
+
       // Permanent delete
       const { error: deleteError } = await supabase
         .from(table)
@@ -27,6 +44,22 @@ export async function POST(request, { params }) {
         .in('id', ids);
 
       if (deleteError) throw deleteError;
+
+      // Log deletions individually
+      if (loggerUser && recordsToDelete) {
+        for (const record of recordsToDelete) {
+          const identifier = record.name || record.po_number || 'Unknown Item';
+          await logActivity({
+            userId: loggerUser.userId,
+            username: loggerUser.username,
+            action: 'DELETE',
+            module: 'Deleted Records',
+            recordId: record.id,
+            details: { 'Permanently Deleted Item': identifier }
+          });
+        }
+      }
+
       return NextResponse.json({ success: true, count: ids.length });
     } 
     
@@ -63,6 +96,19 @@ export async function POST(request, { params }) {
           // If insert succeeds, delete from trash
           await supabase.from(table).delete().eq('id', record.id);
           successCount++;
+          
+          // Log restoration
+          if (loggerUser) {
+            const identifier = record.name || record.po_number || 'Unknown Item';
+            await logActivity({
+              userId: loggerUser.userId,
+              username: loggerUser.username,
+              action: 'RESTORE',
+              module: 'Deleted Records',
+              recordId: record.id,
+              details: { 'Restored Item': identifier }
+            });
+          }
         }
       }));
 

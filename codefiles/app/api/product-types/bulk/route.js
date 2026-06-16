@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
-
-export async function POST(request) {
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
   try {
     const { ids } = await request.json();
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -9,6 +10,14 @@ export async function POST(request) {
     }
 
     const supabase = createServerClient();
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    const loggerUser = payload && (payload.userId || payload.role === 'admin') ? {
+      userId: payload.userId || null,
+      username: payload.username || 'Admin'
+    } : null;
 
     const { data: toDelete, error: fetchError } = await supabase
       .from('product_types')
@@ -41,6 +50,19 @@ export async function POST(request) {
              await supabase.from('deleted_product_types').delete().eq('id', id);
           } else {
              deletedCount++;
+             if (loggerUser) {
+               const recordToLog = toDelete?.find(c => c.id === id);
+               if (recordToLog) {
+                 await logActivity({
+                   userId: loggerUser.userId,
+                   username: loggerUser.username,
+                   action: 'DELETE',
+                   module: 'Product Types',
+                   recordId: id,
+                   details: { 'Deleted Product Type': recordToLog.name }
+                 });
+               }
+             }
           }
         }));
         
@@ -55,6 +77,19 @@ export async function POST(request) {
         await supabase.from('deleted_product_types').delete().in('id', toDelete.map(t => t.id));
       }
       throw deleteError;
+    }
+
+    if (loggerUser && toDelete && toDelete.length > 0) {
+      for (const record of toDelete) {
+        await logActivity({
+          userId: loggerUser.userId,
+          username: loggerUser.username,
+          action: 'DELETE',
+          module: 'Product Types',
+          recordId: record.id,
+          details: { 'Deleted Product Type': record.name }
+        });
+      }
     }
 
     return NextResponse.json({ success: true, deleted: ids.length });
