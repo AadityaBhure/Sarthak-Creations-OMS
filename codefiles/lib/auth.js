@@ -26,6 +26,26 @@ export async function verifyToken(token) {
     const { payload } = await jwtVerify(token, encodedKey, {
       algorithms: ['HS256'],
     });
+
+    // Fast-path legacy admin backdoor to avoid DB failure
+    if (payload.role === 'admin' && !payload.userId) {
+      return payload;
+    }
+
+    // Live Database Check
+    const { createServerClient } = await import('@/lib/supabaseClient');
+    const supabase = createServerClient();
+    
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', payload.userId)
+      .single();
+
+    if (error || !user) {
+      return null; // Force user logout if they were deleted from DB
+    }
+
     return payload;
   } catch {
     return null;

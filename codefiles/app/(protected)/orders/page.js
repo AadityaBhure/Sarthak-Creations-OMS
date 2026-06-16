@@ -483,9 +483,13 @@ function ActiveOrdersPage() {
     option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? 'var(--table-row-hover)' : 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }),
     singleValue: base => ({ ...base, color: 'var(--text-primary)' }),
     valueContainer: base => ({ ...base, padding: '0px 8px', height: '30px' }),
-    input: base => ({ ...base, color: 'var(--text-primary)', margin: 0, padding: 0 }),
     indicatorsContainer: base => ({ ...base, height: '30px' }),
-    dropdownIndicator: base => ({ ...base, padding: '2px 8px' })
+    dropdownIndicator: base => ({ ...base, padding: '0px 4px' })
+  };
+
+  const cellSelectStyles = {
+    ...tblSelectStyles,
+    control: base => ({ ...base, minWidth: '220px', minHeight: '32px', height: '32px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border)', boxShadow: 'none' })
   };
 
   function handleSort(column) {
@@ -680,32 +684,32 @@ function ActiveOrdersPage() {
 
                     {visibleCols.has('date_of_entry') && (
                       <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString('en-GB')}
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', minWidth: '130px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString('en-GB')}
                       </td>
                     )}
                     {visibleCols.has('po_number') && (
                       <td className={pendingEdits[order.id]?.po_number !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={poVal || ''} onChange={e => handleCellChange(order.id, 'po_number', e.target.value)} /> : <span style={{ fontWeight: 600 }}>{poVal}</span>}
+                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', minWidth: '150px' }} value={poVal || ''} onChange={e => handleCellChange(order.id, 'po_number', e.target.value)} /> : <span style={{ fontWeight: 600 }}>{poVal}</span>}
                       </td>
                     )}
                     {visibleCols.has('client') && (
                       <td className={pendingEdits[order.id]?.client_id !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <Select instanceId={`client-${order.id}`} options={clients} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={clients.find(c => c.value === clientValId)} onChange={val => handleCellChange(order.id, 'client_id', val?.value ?? null)} /> : order.clients?.name}
+                        {isEditable ? <Select instanceId={`client-${order.id}`} options={clients} styles={cellSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={clients.find(c => c.value === clientValId)} onChange={val => handleCellChange(order.id, 'client_id', val?.value ?? null)} /> : order.clients?.name}
                       </td>
                     )}
                     {visibleCols.has('product_name') && (
                       <td className={pendingEdits[order.id]?.product_name_id !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <Select instanceId={`pname-${order.id}`} options={productNames} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productNames.find(c => c.value === pNameValId)} onChange={val => handleCellChange(order.id, 'product_name_id', val?.value ?? null)} /> : order.product_names?.name}
+                        {isEditable ? <Select instanceId={`pname-${order.id}`} options={productNames} styles={cellSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productNames.find(c => c.value === pNameValId)} onChange={val => handleCellChange(order.id, 'product_name_id', val?.value ?? null)} /> : order.product_names?.name}
                       </td>
                     )}
                     {visibleCols.has('product_type') && (
                       <td className={pendingEdits[order.id]?.product_type_id !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <Select instanceId={`ptype-${order.id}`} options={productTypes} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productTypes.find(c => c.value === pTypeValId)} onChange={val => handleCellChange(order.id, 'product_type_id', val?.value ?? null)} /> : order.product_types?.name}
+                        {isEditable ? <Select instanceId={`ptype-${order.id}`} options={productTypes} styles={cellSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={productTypes.find(c => c.value === pTypeValId)} onChange={val => handleCellChange(order.id, 'product_type_id', val?.value ?? null)} /> : order.product_types?.name}
                       </td>
                     )}
                     {visibleCols.has('quantity') && (
                       <td className={pendingEdits[order.id]?.quantity !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '90px' }} value={qtyVal || ''} onChange={e => {
+                        {isEditable ? <input type="text" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', minWidth: '100px' }} value={qtyVal || ''} onChange={e => {
                           const rawVal = e.target.value.replace(/[^0-9]/g, '');
                           if (!rawVal) { handleCellChange(order.id, 'quantity', ''); return; }
                           handleCellChange(order.id, 'quantity', Number(rawVal).toLocaleString('en-IN'));
@@ -714,7 +718,7 @@ function ActiveOrdersPage() {
                     )}
                     {visibleCols.has('target_date') && (
                       <td className={pendingEdits[order.id]?.target_date !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', width: '110px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString('en-GB') : '')}
+                        {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', minWidth: '130px' }} value={targetDateVal || ''} onChange={e => handleCellChange(order.id, 'target_date', e.target.value)} /> : (targetDateVal ? new Date(targetDateVal).toLocaleDateString('en-GB') : '')}
                       </td>
                     )}
                     {visibleCols.has('age') && (
@@ -744,7 +748,7 @@ function ActiveOrdersPage() {
                     )}
                     {visibleCols.has('executive') && (
                       <td className={pendingEdits[order.id]?.executive_id !== undefined ? 'cell-edited' : ''}>
-                        {isEditable ? <Select instanceId={`exec-${order.id}`} options={executives} styles={tblSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={executives.find(c => c.value === execValId)} onChange={val => handleCellChange(order.id, 'executive_id', val?.value ?? null)} placeholder="Assign..." isClearable /> : (order.users ? `${order.users.first_name} ${order.users.last_name}` : <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>)}
+                        {isEditable ? <Select instanceId={`exec-${order.id}`} options={executives} styles={cellSelectStyles} menuPortalTarget={typeof window !== 'undefined' ? document.body : null} value={executives.find(c => c.value === execValId)} onChange={val => handleCellChange(order.id, 'executive_id', val?.value ?? null)} placeholder="Assign..." isClearable /> : (order.users ? `${order.users.first_name} ${order.users.last_name}` : <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>)}
                       </td>
                     )}
                     {visibleCols.has('remark') && (
