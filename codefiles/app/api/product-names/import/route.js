@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 const BATCH_SIZE = 200;
 
@@ -18,6 +21,14 @@ export async function POST(request) {
     }));
 
     const supabase = createServerClient();
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    const loggerUser = payload && (payload.userId || payload.role === 'admin') ? {
+      userId: payload.userId || null,
+      username: payload.username || 'Admin'
+    } : null;
 
     // Fetch existing clients to map names to IDs
     const { data: clientsData, error: clientsError } = await supabase.from('clients').select('id, name');
@@ -95,6 +106,7 @@ export async function POST(request) {
     });
 
     let totalInserted = 0;
+    const insertedRecords = [];
     if (recordsToInsert.length > 0) {
       for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
         // Strip original_client_name before DB insert
@@ -109,7 +121,23 @@ export async function POST(request) {
           .select();
 
         if (error) throw error;
-        totalInserted += data ? data.length : 0;
+        if (data) {
+          totalInserted += data.length;
+          insertedRecords.push(...data);
+        }
+      }
+    }
+
+    if (loggerUser && insertedRecords.length > 0) {
+      for (const row of insertedRecords) {
+        await logActivity({
+          userId: loggerUser.userId,
+          username: loggerUser.username,
+          action: 'CREATE',
+          module: 'Product Names',
+          recordId: row.id,
+          details: { name: row.name, client_id: row.client_id }
+        });
       }
     }
 

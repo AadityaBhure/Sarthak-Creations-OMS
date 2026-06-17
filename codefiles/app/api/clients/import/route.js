@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { logActivity } from '@/lib/logger';
 
 const BATCH_SIZE = 200;
 
@@ -19,6 +22,14 @@ export async function POST(request) {
     }));
 
     const supabase = createServerClient();
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('session')?.value;
+    const payload = token ? await verifyToken(token) : null;
+    const loggerUser = payload && (payload.userId || payload.role === 'admin') ? {
+      userId: payload.userId || null,
+      username: payload.username || 'Admin'
+    } : null;
 
     // Fetch existing clients to check for duplicates
     const { data: existingClients, error: existingError } = await supabase
@@ -63,6 +74,19 @@ export async function POST(request) {
           totalInserted += data.length;
           insertedRows.push(...data);
         }
+      }
+    }
+
+    if (loggerUser && insertedRows.length > 0) {
+      for (const row of insertedRows) {
+        await logActivity({
+          userId: loggerUser.userId,
+          username: loggerUser.username,
+          action: 'CREATE',
+          module: 'Client List',
+          recordId: row.id,
+          details: { name: row.name, contact_person: row.contact_person, phone_number: row.phone_number }
+        });
       }
     }
 
