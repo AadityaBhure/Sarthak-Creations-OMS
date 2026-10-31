@@ -7,6 +7,9 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
+  // This route validates Vercel's bearer secret itself, without a session cookie.
+  if (pathname === '/api/keepalive') return NextResponse.next();
+
   // Allow public paths through without checking auth
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();

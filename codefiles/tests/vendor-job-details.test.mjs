@@ -1,0 +1,72 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { validateMutation, filterExpression } from '../lib/vendor-jobs/domain.mjs';
+
+test('Job Card detail validation and filters', () => {
+  assert.doesNotThrow(() => validateMutation('save', { revision: 1, job_title: '', product_type_id: null }));
+  assert.throws(() => validateMutation('save', { revision: 1, job_title: 'x'.repeat(201) }));
+  assert.throws(() => validateMutation('save', { revision: 1, product_type_id: 'bad-id' }));
+  assert.throws(() => validateMutation('complete', { revision: 1, job_title: 'Hidden edit' }));
+  assert.equal(filterExpression([{ column: 'job_title', operator: 'ilike', value: 'Wedding' }]), 'job_title.ilike."%Wedding%"');
+});
+
+test('details migrate, save atomically, preserve serials and survive product master deletion', { skip: !process.env.PGLITE_MODULE }, async () => {
+  const { PGlite } = await import(pathToFileURL(process.env.PGLITE_MODULE).href);
+  const db = new PGlite();
+  const sql = file => readFile(new URL('../supabase/migrations/' + file, import.meta.url), 'utf8');
+  try {
+    await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
+      CREATE TABLE product_types(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),name text);
+      CREATE TABLE orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),created_at timestamptz DEFAULT now(),date_of_entry date);
+      CREATE TABLE deleted_orders(LIKE orders INCLUDING DEFAULTS);
+      CREATE TABLE global_settings(id text primary key,recycle_retention_days integer);
+      CREATE TABLE activity_logs(user_id uuid,username text,action text,module text,record_id uuid,details jsonb);
+      CREATE SCHEMA cron; CREATE FUNCTION cron.schedule(text,text,text) RETURNS bigint LANGUAGE sql AS $$ SELECT 1::bigint $$;
+      GRANT ALL ON product_types TO service_role;`);
+    await db.exec(await sql('20260927_vendor_job_tracking.sql'));
+    await db.exec(await sql('20260928_vendor_job_repair_and_master_recycle.sql'));
+    await db.exec((await sql('20260929_vendor_job_deleted_records.sql')).replace('CREATE EXTENSION IF NOT EXISTS pg_cron;', ''));
+    await db.exec(await sql('20261028_order_numbering.sql'));
+    const master = async kind => (await db.query('SELECT vjt_save_master($1,null,$2) r', [kind, { name: kind }])).rows[0].r.after.id;
+    const vendor = await master('vendors'), job = await master('jobs'), paper = await master('papers');
+    const input = { quantity: 30, vendor_id: vendor, job_type_id: job, paper_type_id: paper };
+    const old = (await db.query("SELECT vjt_mutate('create',null,$1) r", [input])).rows[0].r.after;
+    const migration = await sql('20261028_vendor_job_details.sql');
+    await db.exec(migration); await db.exec(migration);
+    assert.equal((await db.query('SELECT job_title FROM vjt_tracking WHERE id=$1', [old.id])).rows[0].job_title, null);
+    assert.equal((await db.query('SELECT vjt_schema_version() n')).rows[0].n, 4);
+    await db.exec('SET ROLE service_role');
+    const product = (await db.query("INSERT INTO product_types(name) VALUES('Carton') RETURNING id")).rows[0].id;
+    const mutate = async (action, id, data) => (await db.query('SELECT vjt_mutate_details($1,$2,$3) r', [action, id, data])).rows[0].r;
+    let result = await mutate('create', null, { ...input, job_title: '  Wedding boxes  ', product_type_id: product });
+    let card = result.after;
+    assert.equal(card.job_title, 'Wedding boxes'); assert.equal(card.product_type, 'Carton'); assert.equal(card.serial_number, 2);
+    result = await mutate('save', card.id, { revision: card.revision, job_title: 'Gift boxes' });
+    assert.equal(result.before.job_title, 'Wedding boxes');
+    assert.equal(result.after.revision, card.revision + 1);
+    await assert.rejects(mutate('save', card.id, { revision: card.revision, job_title: 'stale' }), /changed/);
+    card = result.after;
+    await assert.rejects(mutate('save', card.id, { revision: card.revision, job_title: 'must roll back', quantity: -1 }), /constraint/);
+    assert.equal((await db.query('SELECT job_title FROM vjt_tracking WHERE id=$1', [card.id])).rows[0].job_title, 'Gift boxes');
+    await assert.rejects(mutate('save', card.id, { revision: card.revision, product_type_id: '00000000-0000-0000-0000-000000000099' }), /unavailable/);
+    await db.query("UPDATE product_types SET name='Renamed Carton' WHERE id=$1", [product]);
+    assert.equal((await db.query('SELECT product_type FROM vjt_tracking WHERE id=$1', [card.id])).rows[0].product_type, 'Renamed Carton');
+    await db.query('DELETE FROM product_types WHERE id=$1', [product]);
+    assert.equal((await db.query('SELECT product_type FROM vjt_tracking WHERE id=$1', [card.id])).rows[0].product_type, 'Renamed Carton');
+    await assert.rejects(mutate('create', null, { ...input, product_type_id: product }), /unavailable/);
+    card = (await mutate('save', card.id, { revision: card.revision, job_title: 'Finished gift boxes', status: 'Completed' })).after;
+    assert.equal(card.status, 'Completed'); assert.equal(card.job_title, 'Finished gift boxes');
+    await assert.rejects(mutate('save', card.id, { revision: card.revision, job_title: 'blocked' }), /reopen/);
+    card = (await mutate('delete', card.id, { revision: card.revision })).after;
+    const deleted = (await db.query("SELECT record FROM vjt_deleted_records WHERE id=$1 AND kind='cards'", [card.id])).rows[0].record;
+    assert.equal(deleted.product_type, 'Renamed Carton'); assert.equal(deleted.job_title, 'Finished gift boxes');
+    card = (await mutate('restore', card.id, { revision: card.revision })).after;
+    card = (await mutate('reopen', card.id, { revision: card.revision })).after;
+    card = (await mutate('save', card.id, { revision: card.revision, product_type_id: null, job_title: '' })).after;
+    assert.equal(card.product_type, null); assert.equal(card.job_title, null); assert.equal(card.serial_number, 2);
+    await db.exec('RESET ROLE'); await db.exec(migration);
+    assert.equal((await db.query('SELECT serial_number FROM vjt_tracking WHERE id=$1', [card.id])).rows[0].serial_number, 2);
+  } finally { await db.close(); }
+});

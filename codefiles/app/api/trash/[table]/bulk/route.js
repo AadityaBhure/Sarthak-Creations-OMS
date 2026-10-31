@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
@@ -12,6 +13,8 @@ const TABLE_MAP = {
 };
 
 export async function POST(request, { params }) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const { table } = await params;
     const { action, ids } = await request.json();

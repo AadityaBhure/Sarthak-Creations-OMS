@@ -3,11 +3,17 @@ import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 import { logActivity } from '@/lib/logger';
+import { numberingFailure, orderNumber } from '@/lib/order-numbering';
 
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
-    const updates = await request.json();
+    const { confirm_duplicate, ...updates } = await request.json();
+    if ('serial_number' in updates || 'id' in updates) return NextResponse.json({ error: 'Serial Number and record identity cannot be edited.' }, { status: 400 });
+    if ('order_number' in updates) {
+      try { updates.order_number = orderNumber(updates.order_number, true); }
+      catch (error) { return NextResponse.json({ error: error.message }, { status: 400 }); }
+    }
     
     const supabase = createServerClient();
 
@@ -71,13 +77,12 @@ export async function PATCH(request, { params }) {
       }
     }
 
-    const { data, error } = await supabase
-      .from('orders')
-      .update(updates)
-      .eq('id', id)
-      .select();
+    const { data: saved, error } = await supabase.rpc('oms_save_order', {
+      p_id: id, p_data: updates, p_confirm_duplicate: confirm_duplicate === true,
+    });
 
-    if (error) throw error;
+    if (error) return numberingFailure(error);
+    const data = [saved];
 
     // Log the activity
     const cookieStore = await cookies();
@@ -89,6 +94,7 @@ export async function PATCH(request, { params }) {
       if (currentOrder) {
         // Build "Old" map resolved to human readable names
         const oldMap = {
+          'Order Number': currentOrder.order_number,
           'PO Number': currentOrder.po_number,
           'Status': currentOrder.status,
           'Target Date': currentOrder.target_date,
@@ -102,6 +108,7 @@ export async function PATCH(request, { params }) {
 
         // Build "New" map resolved to human readable names
         const newMap = { ...oldMap };
+        if (updates.order_number !== undefined) newMap['Order Number'] = updates.order_number;
 
         if (updates.po_number !== undefined) newMap['PO Number'] = updates.po_number;
         if (updates.status !== undefined) newMap['Status'] = updates.status;

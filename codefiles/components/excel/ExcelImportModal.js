@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 
-export default function ExcelImportModal({ isOpen, onClose, entityName, importEndpoint, onSuccess, columnMap, uniqueColumnDisplay }) {
+export default function ExcelImportModal({ isOpen, onClose, entityName, importEndpoint, onSuccess, columnMap, uniqueColumnDisplay, confirmationTitle = 'Missing Clients Detected', instructions }) {
   const [file, setFile] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -17,6 +17,8 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
   const expectedHeaders = Object.keys(columnMap);
 
   function handleFileChange(e) {
+    setPreviewData(null);
+    setError('');
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       setFile(selectedFile);
@@ -135,6 +137,7 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
     setPreviewData(null);
     setError('');
     setResult(null);
+    setConfirmationRequest(null);
     setActiveView('summary');
     onClose();
   }
@@ -149,11 +152,12 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
             <div style={{ padding: '16px', border: '1px solid var(--error)', borderRadius: '8px', backgroundColor: 'var(--bg-secondary)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                 <span style={{ fontSize: '24px' }}>⚠️</span>
-                <h4 style={{ margin: 0, color: 'var(--error)' }}>Missing Clients Detected</h4>
+                <h4 style={{ margin: 0, color: 'var(--error)' }}>{confirmationTitle}</h4>
               </div>
               <p style={{ fontSize: '14px', marginBottom: '16px' }}>
                 {confirmationRequest.message}
               </p>
+              {error && <div className="form-error" style={{ marginBottom: '16px' }}>{error}</div>}
               <p style={{ fontSize: '14px', marginBottom: '20px', color: 'var(--text-secondary)' }}>
                 Do you want to skip these records and import the valid ones?
               </p>
@@ -176,6 +180,7 @@ export default function ExcelImportModal({ isOpen, onClose, entityName, importEn
                 Upload an Excel (.xlsx, .xls) or CSV file. It must contain the following columns:
                 <br/>
                 <strong>{expectedHeaders.join(', ')}</strong>
+                {instructions && <p style={{ marginTop: '8px' }}>{instructions}</p>}
               </div>
 
               <div style={{ marginBottom: '20px' }}>

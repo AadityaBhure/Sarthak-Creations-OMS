@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
@@ -5,6 +6,8 @@ import { verifyToken } from '@/lib/auth';
 import { logActivity } from '@/lib/logger';
 
 export async function PATCH(request, { params }) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const { first_name, last_name, phone_number } = await request.json();
@@ -82,6 +85,8 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const supabase = createServerClient();

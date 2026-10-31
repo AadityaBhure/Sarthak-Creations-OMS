@@ -48,7 +48,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const endpoint = '/api/auth/login'; // single endpoint avoids Turbopack folder watcher bug
+      const endpoint = '/api/auth/login';
       const body = isRegistering 
         ? { action: 'register', first_name: firstName, last_name: lastName, username, phone_number: phone, password } 
         : { action: 'login', identifier, password };
@@ -59,6 +59,10 @@ export default function LoginPage() {
         body: JSON.stringify(body),
       });
 
+      if (!res.headers.get('content-type')?.includes('application/json')) {
+        setError(`The login service returned an unexpected response (HTTP ${res.status}). Please restart the application server and try again.`);
+        return;
+      }
       const data = await res.json();
 
       if (res.ok) {

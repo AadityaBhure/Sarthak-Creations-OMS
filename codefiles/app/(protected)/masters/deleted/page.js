@@ -240,6 +240,8 @@ export default function RecycleBin() {
           </th>
           <th style={{ width: '40px' }}>Sr.</th>
           <th style={{ width: '90px' }}>DDE</th>
+          <th>Serial Number</th>
+          <th>Order Number</th>
           <th style={{ width: '100px' }}>PO Number</th>
           <th style={{ width: '140px' }}>Client</th>
           <th style={{ width: '120px' }}>Product List</th>
@@ -268,7 +270,7 @@ export default function RecycleBin() {
   }
 
   function renderTableContent() {
-    const colCount = activeTab === 'deleted_orders' ? 13 : 6;
+    const colCount = activeTab === 'deleted_orders' ? 15 : 6;
 
     if (loading) {
       return (
@@ -304,6 +306,8 @@ export default function RecycleBin() {
         {activeTab === 'deleted_orders' ? (
           <>
             <td>{new Date(record.date_of_entry).toLocaleDateString('en-GB')}</td>
+            <td>{record.serial_number ?? '—'}</td>
+            <td>{record.order_number ?? '—'}</td>
             <td><strong>{record.po_number}</strong></td>
             <td>{masterMaps.clients[record.client_id] || 'Unknown'}</td>
             <td>{masterMaps.productNames[record.product_name_id] || 'Unknown'}</td>

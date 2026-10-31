@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
@@ -13,6 +14,8 @@ const ALLOWED_TABLES = [
 ];
 
 export async function GET(request, { params }) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const { table } = await params;
     
@@ -58,6 +61,8 @@ export async function GET(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const { table } = await params;
     

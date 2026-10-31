@@ -7,8 +7,11 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import AlertModal from '@/components/ui/AlertModal';
 import { createBrowserClient } from '@/lib/supabaseClient';
 import { useGlobalSettings } from '@/components/SettingsProvider';
+import useOrderSave from '@/components/orders/useOrderSave';
 
 const FILTER_COLUMNS = [
+  { value: 'serial_number', label: 'Serial Number', type: 'number' },
+  { value: 'order_number', label: 'Order Number', type: 'number' },
   { value: 'po_number',      label: 'PO. No.',    type: 'text' },
   { value: 'client_id',      label: 'Client',       type: 'select' },
   { value: 'product_name_id',label: 'Product', type: 'select' },
@@ -27,6 +30,8 @@ const OPERATORS = {
 };
 
 const ALL_COLUMNS = [
+  { key: 'serial_number', label: 'Serial Number' },
+  { key: 'order_number', label: 'Order Number' },
   { key: 'date_of_entry', label: 'Date' },
   { key: 'po_number',     label: 'PO. No.' },
   { key: 'client',        label: 'Client' },
@@ -89,6 +94,7 @@ function CompletedOrdersPage() {
 
   const [pendingUpdates, setPendingUpdates] = useState(0);
   const [isEditable, setIsEditable] = useState(false);
+  const { saveOrder, numberingDialog } = useOrderSave();
   const [pendingEdits, setPendingEdits] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -257,11 +263,11 @@ function CompletedOrdersPage() {
 
   function exportCSV() {
     const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
-    const headers = ['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Age (days)', 'Status', 'Remarks', 'In-Charge (History)'];
+    const headers = ['Row', 'Serial Number', 'Order Number', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Age (days)', 'Status', 'Remarks', 'In-Charge (History)'];
     const csvRows = [
       headers.join(','),
       ...rows.map((o, i) => [
-        i + 1, new Date(o.date_of_entry).toLocaleDateString('en-GB'), `"${o.po_number || ''}"`,
+        i + 1, o.serial_number ?? '', o.order_number ?? '', new Date(o.date_of_entry).toLocaleDateString('en-GB'), `"${o.po_number || ''}"`,
         `"${o.clients?.name || ''}"`, `"${o.product_names?.name || ''}"`, `"${o.product_types?.name || ''}"`,
         o.quantity != null ? `"${new Intl.NumberFormat('en-IN').format(o.quantity)}"` : '', calcDaysOld(o.date_of_entry), `"${o.status || ''}"`, `"${(o.remark || '').replace(/"/g, '""')}"`, `"${(o.assignment_history || '').replace(/"/g, '""')}"`
       ].join(','))
@@ -290,8 +296,8 @@ function CompletedOrdersPage() {
     
     autoTable(doc, {
       startY: address ? 35 : 30,
-      head: [['Sr.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remarks', 'In-Charge']],
-      body: rows.map((o, i) => [i + 1, new Date(o.date_of_entry).toLocaleDateString('en-GB'), o.po_number || '',
+      head: [['Row', 'Serial Number', 'Order Number', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remarks', 'In-Charge']],
+      body: rows.map((o, i) => [i + 1, o.serial_number ?? '', o.order_number ?? '', new Date(o.date_of_entry).toLocaleDateString('en-GB'), o.po_number || '',
         o.clients?.name || '', o.product_names?.name || '', o.product_types?.name || '',
         o.quantity != null ? new Intl.NumberFormat('en-IN').format(o.quantity) : '', `${calcDaysOld(o.date_of_entry)}d`, o.status || '', o.remark || '', o.assignment_history || '']),
       styles: { fontSize: 8 }, headStyles: { fillColor: [30, 30, 30] }
@@ -391,15 +397,19 @@ function CompletedOrdersPage() {
   function hasPendingEdits() { return Object.keys(pendingEdits).length > 0; }
 
   async function saveAllEdits() {
-    setSaving(true); let errorCount = 0;
-    for (const [id, changes] of Object.entries(pendingEdits)) {
+    setSaving(true);
+    const failures = [];
+    for (const [id, rawChanges] of Object.entries(pendingEdits)) {
       try {
-        const res = await fetch(`/api/orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
-        if (!res.ok) throw new Error('Failed to update');
-      } catch (err) { showAlert('Error', `Error: ${err.message}`); errorCount++; }
+        const changes = { ...rawChanges };
+        if (changes.quantity !== undefined) changes.quantity = parseInt(String(changes.quantity).replace(/,/g, ''), 10) || 0;
+        const saved = await saveOrder('/api/orders/' + id, 'PATCH', changes);
+        if (saved) setPendingEdits(prev => { const next = { ...prev }; delete next[id]; return next; });
+      } catch (error) { failures.push(error.message); }
     }
-    if (errorCount === 0) { setPendingEdits({}); await fetchOrders(true); }
+    await fetchOrders(true);
     setSaving(false);
+    if (failures.length) showAlert('Could not save some orders', failures.join('\n'));
   }
 
   function discardEdits() { setPendingEdits({}); }
@@ -552,6 +562,8 @@ function CompletedOrdersPage() {
                 <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
               </th>
               <th style={{ width: '40px' }}>Sr.</th>
+              {visibleCols.has('serial_number') && <SortHeader column="serial_number" label="Serial Number" width="110px" />}
+              {visibleCols.has('order_number') && <SortHeader column="order_number" label="Order Number" width="120px" />}
               {visibleCols.has('date_of_entry')   && <SortHeader column="date_of_entry" label="Date" width="135px" />}
               {visibleCols.has('po_number')        && <SortHeader column="po_number" label="PO. No." width="110px" />}
               {visibleCols.has('client')           && <SortHeader column="clients.name" label="Client" width="200px" />}
@@ -596,6 +608,10 @@ function CompletedOrdersPage() {
                     </td>
                     <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * limit + index + 1}</td>
 
+                    {visibleCols.has('serial_number') && <td>{order.serial_number ?? '—'}</td>}
+                    {visibleCols.has('order_number') && <td className={pendingEdits[order.id]?.order_number !== undefined ? 'cell-edited' : ''}>
+                      {isEditable ? <input aria-label={'Order Number ' + order.po_number} className="form-input" inputMode="numeric" value={getDisplayValue(order, 'order_number') ?? ''} onChange={e => handleCellChange(order.id, 'order_number', e.target.value.replace(/[^0-9]/g, ''))} /> : (order.order_number ?? '—')}
+                    </td>}
                     {visibleCols.has('date_of_entry') && (
                       <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
                         {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString('en-GB')}
@@ -726,6 +742,7 @@ function CompletedOrdersPage() {
         </div>
       )}
 
+      {numberingDialog}
       <ConfirmModal isOpen={confirmModal.isOpen} title="Delete Order" message={`Are you sure you want to delete PO #${confirmModal.po}? It will be moved to the recycle bin.`} confirmText="Delete" confirmColor="danger" onConfirm={handleDelete} onCancel={() => setConfirmModal({ isOpen: false, id: null, po: '' })} />
       <ConfirmModal isOpen={bulkDelConfirm} title="Delete Selected Orders" message={`Are you sure you want to delete ${selectedCount} selected orders? They will all be moved to the Recycle Bin.`} confirmText="Delete All" confirmColor="danger" onConfirm={handleBulkDelete} onCancel={() => setBulkDelConfirm(false)} />
       <AlertModal isOpen={alertInfo.isOpen} title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo({ ...alertInfo, isOpen: false })} />

@@ -38,7 +38,7 @@ export async function verifyToken(token) {
     
     const { data: user, error } = await supabase
       .from('users')
-      .select('id')
+      .select('id, role')
       .eq('id', payload.userId)
       .single();
 
@@ -46,7 +46,7 @@ export async function verifyToken(token) {
       return null; // Force user logout if they were deleted from DB
     }
 
-    return payload;
+    return { ...payload, role: user.role };
   } catch {
     return null;
   }

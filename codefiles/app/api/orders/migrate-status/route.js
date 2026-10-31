@@ -1,7 +1,10 @@
+import { requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
 
 export async function POST(request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const { oldName, newName } = await request.json();
 

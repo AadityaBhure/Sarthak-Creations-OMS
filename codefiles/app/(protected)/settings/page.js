@@ -281,9 +281,9 @@ export default function SettingsPage() {
           </div>
 
           <div style={{ marginTop: '32px', padding: '20px', background: 'var(--bg-page)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-            <h4 style={{ fontWeight: '600', marginBottom: '6px', fontSize: '15px' }}>Full Database Backup</h4>
+            <h4 style={{ fontWeight: '600', marginBottom: '6px', fontSize: '15px' }}>Business Data Export</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.4' }}>
-              Download a single .zip archive containing all active Orders, Completed Orders, Clients, and Products formatted as raw CSV files.
+              Administrators can download both modules as CSV and JSON files, including recoverable deleted records and numbering data. Avoid editing records while the export runs. This excludes user accounts, audit logs, and database setup; use Supabase backups for full recovery.
             </p>
             <a href="/api/export-database" download className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
               Download Global Export (.zip)

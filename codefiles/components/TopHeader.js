@@ -4,6 +4,15 @@ import { usePathname } from 'next/navigation';
 
 // Route → Page Title mapping (covers all phases)
 const PAGE_TITLES = {
+  '/vendor-jobs/active': 'Active Vendor Jobs',
+  '/vendor-jobs/completed': 'Completed Vendor Jobs',
+  '/vendor-jobs/canceled': 'Canceled Vendor Jobs',
+  '/vendor-jobs/ledger': 'Vendor-wise Ledger',
+  '/vendor-jobs/new': 'New Job Card',
+  '/vendor-jobs/deleted': 'Deleted Records',
+  '/vendor-jobs/masters/vendors': 'Vendor Master',
+  '/vendor-jobs/masters/jobs': 'Job Type Master',
+  '/vendor-jobs/masters/papers': 'Paper Type Master',
   '/dashboard':              'Dashboard',
   '/orders':                 'Active Orders',
   '/orders/completed':       'Completed Orders',

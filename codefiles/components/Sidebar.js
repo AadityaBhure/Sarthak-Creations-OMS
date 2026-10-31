@@ -12,21 +12,54 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Orders',
+    label: 'Client Progress Tracking',
+    groups: [
+      {
+        id: 'client-orders', label: 'Orders',
+        links: [
+          { href: '/orders/new', label: 'New Order' },
+          { href: '/orders', label: 'Order List' },
+          { href: '/orders/completed', label: 'Completed Orders' },
+        ],
+      },
+      {
+        id: 'client-masters', label: 'Masters',
+        links: [
+          { href: '/masters/executives', label: 'Executive List' },
+          { href: '/masters/clients', label: 'Client List' },
+          { href: '/masters/product-names', label: 'Product Lists' },
+          { href: '/masters/product-types', label: 'Product Types' },
+        ],
+      },
+    ],
     links: [
-      { href: '/orders', label: 'Order List' },
-      { href: '/orders/completed', label: 'Completed Orders' },
-      { href: '/orders/new', label: 'New Order' },
+      { href: '/masters/deleted', label: 'Deleted Records' },
     ],
   },
   {
-    label: 'Masters',
+    label: 'Vendor Job Tracking',
+    groups: [
+      {
+        id: 'vendor-jobs', label: 'Jobs',
+        links: [
+          { href: '/vendor-jobs/new', label: 'New Job Card' },
+          { href: '/vendor-jobs/active', label: 'Active Jobs' },
+          { href: '/vendor-jobs/completed', label: 'Completed Jobs' },
+          { href: '/vendor-jobs/canceled', label: 'Canceled Jobs' },
+          { href: '/vendor-jobs/ledger', label: 'Vendor-wise Ledger' },
+        ],
+      },
+      {
+        id: 'vendor-masters', label: 'Masters',
+        links: [
+          { href: '/vendor-jobs/masters/vendors', label: 'Vendors' },
+          { href: '/vendor-jobs/masters/jobs', label: 'Job Types' },
+          { href: '/vendor-jobs/masters/papers', label: 'Paper Types' },
+        ],
+      },
+    ],
     links: [
-      { href: '/masters/executives', label: 'Executive List' },
-      { href: '/masters/clients', label: 'Client List' },
-      { href: '/masters/product-names', label: 'Product Lists' },
-      { href: '/masters/product-types', label: 'Product Types' },
-      { href: '/masters/deleted', label: 'Deleted Records' },
+      { href: '/vendor-jobs/deleted', label: 'Deleted Records' },
     ],
   },
   {
@@ -48,6 +81,34 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [theme, setTheme] = useState('light');
+  const [expandedGroups, setExpandedGroups] = useState({
+    'client-orders': true,
+    'client-masters': true,
+    'vendor-jobs': true,
+    'vendor-masters': true,
+  });
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('oms-sidebar-groups') || '{}');
+      if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return;
+      setExpandedGroups(current => Object.fromEntries(
+        Object.entries(current).map(([id, expanded]) => [id, typeof saved[id] === 'boolean' ? saved[id] : expanded]),
+      ));
+    } catch {
+      // Keep the default groups usable if browser storage is unavailable or invalid.
+    }
+  }, []);
+
+  function toggleGroup(id) {
+    const next = { ...expandedGroups, [id]: !expandedGroups[id] };
+    setExpandedGroups(next);
+    try {
+      localStorage.setItem('oms-sidebar-groups', JSON.stringify(next));
+    } catch {
+      // The toggle still works for this session when storage is unavailable.
+    }
+  }
 
   // Load saved theme on mount
   useEffect(() => {
@@ -96,7 +157,30 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         {NAV_SECTIONS.map((section) => (
           <div key={section.label}>
-            <div className="sidebar-section-label">{section.label}</div>
+            <div className={`sidebar-section-label${section.groups ? ' sidebar-module-label' : ''}`}>{section.label}</div>
+            {section.groups?.map(group => (
+              <div key={group.id}>
+                <button
+                  type="button"
+                  className={`sidebar-link sidebar-group-toggle${group.links.some(link => isActive(link.href)) ? ' sidebar-group-current' : ''}`}
+                  aria-expanded={expandedGroups[group.id]}
+                  aria-controls={`${group.id}-links`}
+                  onClick={() => toggleGroup(group.id)}
+                >
+                  {group.label}
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" className={expandedGroups[group.id] ? 'sidebar-group-chevron expanded' : 'sidebar-group-chevron'}>
+                    <path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div id={`${group.id}-links`} hidden={!expandedGroups[group.id]}>
+                  {group.links.map(link => (
+                    <Link key={link.href} href={link.href} aria-current={isActive(link.href) ? 'page' : undefined} className={`sidebar-link sidebar-group-link${isActive(link.href) ? ' active' : ''}`}>
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
             {section.links.map((link) => (
               <Link
                 key={link.href}

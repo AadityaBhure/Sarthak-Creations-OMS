@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 import { logActivity } from '@/lib/logger';
+import { numberingFailure, orderNumber } from '@/lib/order-numbering';
 
 export async function GET(request) {
   try {
@@ -53,6 +54,12 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
+    if ('serial_number' in body) return NextResponse.json({ error: 'Serial Number is assigned automatically and cannot be edited.' }, { status: 400 });
+    let number, expected;
+    try {
+      number = orderNumber(body.order_number, true);
+      expected = orderNumber(body.expected_order_number, true);
+    } catch (error) { return NextResponse.json({ error: error.message }, { status: 400 }); }
     const { date_of_entry, po_number, client_id, product_name_id, product_type_id, quantity, status, remark, executive_id, target_date } = body;
 
     // Basic validation
@@ -61,10 +68,12 @@ export async function POST(request) {
     }
 
     const supabase = createServerClient();
-    const { data, error } = await supabase
-      .from('orders')
-      .insert([
-        {
+    const { data: saved, error } = await supabase.rpc('oms_save_order', {
+      p_id: null,
+      p_confirm_duplicate: body.confirm_duplicate === true,
+      p_expected_order_number: expected,
+      p_data: {
+          order_number: number,
           date_of_entry,
           po_number,
           client_id,
@@ -75,11 +84,11 @@ export async function POST(request) {
           remark: remark || '',
           executive_id: executive_id || null,
           target_date: target_date || null
-        }
-      ])
-      .select();
+        },
+    });
 
-    if (error) throw error;
+    if (error) return numberingFailure(error);
+    const data = [saved];
 
     // Log the activity
     const cookieStore = await cookies();
@@ -111,6 +120,8 @@ export async function POST(request) {
         module: 'New Orders',
         recordId: data[0].id,
         details: {
+          'Serial Number': saved.serial_number,
+          'Order Number': saved.order_number,
           'PO Number': po_number,
           'Client': clientName,
           'Product': productName,

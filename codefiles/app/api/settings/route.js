@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/require-admin';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
@@ -22,6 +23,8 @@ export async function GET() {
 }
 
 export async function POST(req) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
   try {
     const body = await req.json();
     const supabase = createServerClient();
