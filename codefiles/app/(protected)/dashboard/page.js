@@ -53,9 +53,54 @@ export default async function DashboardPage() {
   const { count: typesCount } = await supabase.from('product_types').select('*', { count: 'exact', head: true });
 
 
+  // Exact counts avoid the API row limit; recycled jobs and masters are excluded.
+  const vendorMetrics = [
+    { label: 'Active Jobs', table: 'vjt_job_cards', statuses: ['Active'], href: '/vendor-jobs/active?filter_status=Active', color: '#3b82f6' },
+    { label: 'On Hold', table: 'vjt_job_cards', statuses: ['Hold'], href: '/vendor-jobs/active?filter_status=Hold', color: '#d97706' },
+    { label: 'Completed Jobs', table: 'vjt_job_cards', statuses: ['Completed'], href: '/vendor-jobs/completed', color: '#16a34a' },
+    { label: 'Canceled Jobs', table: 'vjt_job_cards', statuses: ['Canceled'], href: '/vendor-jobs/canceled', color: '#ef4444' },
+    { label: 'Vendors', table: 'vjt_vendors', href: '/vendor-jobs/masters/vendors' },
+    { label: 'Job Types', table: 'vjt_job_types', href: '/vendor-jobs/masters/jobs' },
+    { label: 'Paper Types', table: 'vjt_paper_types', href: '/vendor-jobs/masters/papers' },
+  ];
+  const vendorResults = await Promise.all(vendorMetrics.map(async metric => {
+    try {
+      let query = supabase.from(metric.table).select('*', { count: 'exact', head: true }).is('deleted_at', null);
+      if (metric.statuses) query = query.in('status', metric.statuses);
+      const { count, error } = await query;
+      return { ...metric, count: error ? null : count };
+    } catch {
+      return { ...metric, count: null };
+    }
+  }));
+
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <style>{`
+        .dash-module {
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: clamp(16px, 3vw, 28px);
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+        .dash-module-client { background-color: #f0f5fc; }
+        .dash-module-vendor { background-color: #f7f3ec; }
+        [data-theme='dark'] .dash-module-client { background-color: #1b2430; }
+        [data-theme='dark'] .dash-module-vendor { background-color: #29251f; }
+        .dash-module-heading {
+          color: var(--btn-danger-bg, #ef4444);
+          font-size: 22px;
+          font-weight: 700;
+          margin: 0 0 6px;
+        }
+        .dash-module-description {
+          color: var(--text-secondary);
+          font-size: 14px;
+          margin: 0;
+        }
         .dash-card {
           background-color: var(--bg-surface);
           border: 1px solid var(--border);
@@ -83,9 +128,14 @@ export default async function DashboardPage() {
         <h1 className="page-title" style={{ margin: 0 }}>Dashboard</h1>
       </div>
 
+      <section className="dash-module dash-module-client" aria-labelledby="client-dashboard-heading">
+        <header>
+          <h2 id="client-dashboard-heading" className="dash-module-heading">Client Progress Tracking</h2>
+          <p className="dash-module-description">Customer orders, delivery alerts and client master records.</p>
+        </header>
       {/* SECTION 1: Status Metrics & Overdue Alerts */}
       <section>
-        <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>Order Status & Alerts</h2>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>Order Status & Alerts</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
           {/* Overdue Alerts Card */}
           <Link href="/orders" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -115,7 +165,7 @@ export default async function DashboardPage() {
 
       {/* SECTION 2: Master Records Metrics */}
       <section>
-        <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>Master Records</h2>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>Master Records</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
           <div className="dash-card">
             <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>Registered Clients</div>
@@ -131,8 +181,33 @@ export default async function DashboardPage() {
           </div>
         </div>
       </section>
+      </section>
 
-
+      <section className="dash-module dash-module-vendor" aria-labelledby="vendor-dashboard-heading">
+        <header>
+          <h2 id="vendor-dashboard-heading" className="dash-module-heading">Vendor Job Tracking</h2>
+          <p className="dash-module-description">Vendor job cards and master records. Deleted records are excluded.</p>
+        </header>
+        {vendorResults.some(metric => metric.count === null) && (
+          <p role="alert" className="dash-module-description">Some vendor counts could not be loaded. Refresh the page to try again.</p>
+        )}
+        {['Job Status', 'Vendor Master Records'].map((heading, group) => (
+          <section key={heading}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>{heading}</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '16px' }}>
+              {vendorResults.filter(metric => group === 0 ? metric.statuses : !metric.statuses).map(metric => (
+                <Link key={metric.label} href={metric.href} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="dash-card clickable" style={{ height: '100%', boxSizing: 'border-box', borderTop: metric.color ? `4px solid ${metric.color}` : undefined }}>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 500 }}>{metric.label}</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, lineHeight: 1 }}>{metric.count === null ? 'Unavailable' : metric.count}</div>
+                    {metric.note && <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{metric.note}</div>}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </section>
     </div>
   );
 }

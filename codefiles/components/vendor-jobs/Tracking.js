@@ -18,7 +18,7 @@ import StageDialog from './StageDialog';
 import Exports from './Exports';
 import styles from './vendor-jobs.module.css';
 
-export default function Tracking({ context = 'active' }) {
+export default function Tracking({ context = 'active', initialStatus = '' }) {
   const { masters, error: masterError } = useMasters();
   const { settings } = useGlobalSettings();
   const { confirm, notify, dialogs } = useDialogs();
@@ -29,7 +29,9 @@ export default function Tracking({ context = 'active' }) {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(null);
   const limit = size || settings?.default_pagination || 50;
-  const [filters, setFilters] = useState([]);
+  const [filters, setFilters] = useState(() =>
+    initialStatus ? [{ column: 'status', operator: 'eq', value: initialStatus, logic: 'and' }] : [],
+  );
   const [sort, setSort] = useState({
     column: context === 'deleted' ? 'deleted_at' : 'created_at',
     direction: 'desc',
