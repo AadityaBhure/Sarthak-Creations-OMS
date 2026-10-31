@@ -47,7 +47,7 @@
   /* Table */
   --table-header-bg:    #f0f0f0;
   --table-row-hover:    #fafafa;
-  --table-row-selected: #f0f0f0;
+  --table-row-selected: #dbeafe;
   --table-border:       #e0e0e0;
 
   /* Input */
@@ -122,7 +122,7 @@
 
   --table-header-bg:    #222222;
   --table-row-hover:    #202020;
-  --table-row-selected: #2a2a2a;
+  --table-row-selected: #1e3a5f;
   --table-border:       #2a2a2a;
 
   --input-bg:       #1a1a1a;
@@ -644,7 +644,9 @@ input, select, textarea {
   background: var(--table-row-hover);
 }
 
-.data-table tbody tr.selected td {
+.data-table tbody tr.selected td,
+.data-table tbody tr.row-selected td,
+.data-table tbody tr:has(> td:first-child input[type="checkbox"]:checked) > td {
   background: var(--table-row-selected);
 }
 

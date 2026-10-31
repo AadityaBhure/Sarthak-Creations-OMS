@@ -12,8 +12,7 @@ import { useGlobalSettings } from '@/components/SettingsProvider';
 import useOrderSave from '@/components/orders/useOrderSave';
 
 const FILTER_COLUMNS = [
-  { value: 'serial_number', label: 'Serial Number', type: 'number' },
-  { value: 'order_number', label: 'Order Number', type: 'number' },
+  { value: 'serial_number', label: 'Order No.', type: 'number' },
   { value: 'po_number', label: 'PO. No.', type: 'text' },
   { value: 'client_id', label: 'Client', type: 'select' },
   { value: 'product_name_id', label: 'Product', type: 'select' },
@@ -33,8 +32,7 @@ const OPERATORS = {
 };
 
 const ALL_COLUMNS = [
-  { key: 'serial_number', label: 'Serial Number' },
-  { key: 'order_number', label: 'Order Number' },
+  { key: 'serial_number', label: 'Order No.' },
   { key: 'date_of_entry', label: 'Date' },
   { key: 'po_number',     label: 'PO. No.' },
   { key: 'client',        label: 'Client' },
@@ -42,7 +40,7 @@ const ALL_COLUMNS = [
   { key: 'product_type',  label: 'Type' },
   { key: 'quantity',      label: 'Qty' },
   { key: 'target_date',   label: 'Target' },
-  { key: 'age',           label: 'Age' },
+  { key: 'age',           label: 'Days' },
   { key: 'status',        label: 'Status' },
   { key: 'executive',     label: 'Assigned' },
   { key: 'remark',        label: 'Remarks' },
@@ -282,11 +280,11 @@ function ActiveOrdersPage() {
   // ---- EXPORT ----
   function exportCSV() {
     const rows = orders.filter(o => selectedIds.size === 0 || selectedIds.has(o.id));
-    const headers = ['Row', 'Serial Number', 'Order Number', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Age (days)', 'Status', 'Remarks', 'In-Charge (History)'];
+    const headers = ['Row', 'Order No.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Quantity', 'Days', 'Status', 'Remarks', 'In-Charge (History)'];
     const csvRows = [
       headers.join(','),
       ...rows.map((o, i) => [
-        i + 1, o.serial_number ?? '', o.order_number ?? '',
+        i + 1, o.serial_number ?? '',
         new Date(o.date_of_entry).toLocaleDateString('en-GB'),
         `"${o.po_number || ''}"`,
         `"${o.clients?.name || ''}"`,
@@ -328,9 +326,9 @@ function ActiveOrdersPage() {
     
     autoTable(doc, {
       startY: address ? 35 : 30,
-      head: [['Row', 'Serial Number', 'Order Number', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Age', 'Status', 'Remarks', 'In-Charge']],
+      head: [['Row', 'Order No.', 'Date', 'PO. No.', 'Client', 'Product', 'Type', 'Qty', 'Days', 'Status', 'Remarks', 'In-Charge']],
       body: rows.map((o, i) => [
-        i + 1, o.serial_number ?? '', o.order_number ?? '',
+        i + 1, o.serial_number ?? '',
         new Date(o.date_of_entry).toLocaleDateString('en-GB'),
         o.po_number || '',
         o.clients?.name || '',
@@ -638,8 +636,7 @@ function ActiveOrdersPage() {
                 <input type="checkbox" checked={allOnPageSelected} onChange={handleSelectAll} title="Select all on this page" />
               </th>
               <th style={{ width: '40px' }}>Sr.</th>
-              {visibleCols.has('serial_number') && <SortHeader column="serial_number" label="Serial Number" width="110px" />}
-              {visibleCols.has('order_number') && <SortHeader column="order_number" label="Order Number" width="120px" />}
+              {visibleCols.has('serial_number') && <SortHeader column="serial_number" label="Order No." width="110px" />}
               {visibleCols.has('date_of_entry')   && <SortHeader column="date_of_entry" label="Date" width="135px" />}
               {visibleCols.has('po_number')        && <SortHeader column="po_number" label="PO. No." width="110px" />}
               {visibleCols.has('client')           && <SortHeader column="clients.name" label="Client" width="200px" />}
@@ -647,7 +644,7 @@ function ActiveOrdersPage() {
               {visibleCols.has('product_type')     && <SortHeader column="product_types.name" label="Type" width="120px" />}
               {visibleCols.has('quantity')         && <SortHeader column="quantity" label="Qty" width="90px" />}
               {visibleCols.has('target_date')      && <SortHeader column="target_date" label="Target" width="100px" />}
-              {visibleCols.has('age')              && <SortHeader column="date_of_entry" label="Age" width="55px" />}
+              {visibleCols.has('age')              && <SortHeader column="date_of_entry" label="Days" width="55px" />}
               {visibleCols.has('status')           && <SortHeader column="status" label="Status" width="160px" />}
               {visibleCols.has('executive')        && <SortHeader column="users.first_name" label="Assigned" width="130px" />}
               {visibleCols.has('remark')           && <SortHeader column="remark" label="Remarks" width="150px" />}
@@ -690,9 +687,6 @@ function ActiveOrdersPage() {
                     <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * limit + index + 1}</td>
 
                     {visibleCols.has('serial_number') && <td>{order.serial_number ?? '—'}</td>}
-                    {visibleCols.has('order_number') && <td className={pendingEdits[order.id]?.order_number !== undefined ? 'cell-edited' : ''}>
-                      {isEditable ? <input aria-label={'Order Number ' + order.po_number} className="form-input" inputMode="numeric" value={getDisplayValue(order, 'order_number') ?? ''} onChange={e => handleCellChange(order.id, 'order_number', e.target.value.replace(/[^0-9]/g, ''))} /> : (order.order_number ?? '—')}
-                    </td>}
                     {visibleCols.has('date_of_entry') && (
                       <td className={pendingEdits[order.id]?.date_of_entry !== undefined ? 'cell-edited' : ''}>
                         {isEditable ? <input type="date" className="form-input" style={{ padding: '2px 4px', fontSize: '13px', minWidth: '130px' }} value={dateVal} onChange={e => handleCellChange(order.id, 'date_of_entry', e.target.value)} /> : new Date(dateVal).toLocaleDateString('en-GB')}
