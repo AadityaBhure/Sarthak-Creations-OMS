@@ -374,6 +374,25 @@ input, select, textarea {
   color: var(--text-sidebar-active);
 }
 
+.sidebar-group-links {
+  position: relative;
+}
+
+.sidebar-group-links::after {
+  content: '';
+  position: absolute;
+  left: 23px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: #606060;
+  pointer-events: none;
+}
+
+.sidebar-group-links:has(.active)::after {
+  background: #999999;
+}
+
 .sidebar-group-link {
   padding-left: 32px;
 }

@@ -172,7 +172,7 @@ export default function Sidebar() {
                     <path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                <div id={`${group.id}-links`} hidden={!expandedGroups[group.id]}>
+                <div id={`${group.id}-links`} className="sidebar-group-links" hidden={!expandedGroups[group.id]}>
                   {group.links.map(link => (
                     <Link key={link.href} href={link.href} aria-current={isActive(link.href) ? 'page' : undefined} className={`sidebar-link sidebar-group-link${isActive(link.href) ? ' active' : ''}`}>
                       {link.label}
