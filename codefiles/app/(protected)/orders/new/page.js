@@ -10,20 +10,6 @@ import useOrderSave from '@/components/orders/useOrderSave';
 export default function NewOrderPage() {
   const router = useRouter();
   const { saveOrder, numberingDialog } = useOrderSave();
-  const [suggestedNumber, setSuggestedNumber] = useState(null);
-  const [numberLoading, setNumberLoading] = useState(true);
-  async function loadNumber() {
-    setNumberLoading(true);
-    setSuggestedNumber(null);
-    try {
-      const res = await fetch('/api/orders/defaults');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load Order Number.');
-      setSuggestedNumber(data.order_number);
-      setFormData(prev => ({ ...prev, order_number: String(data.order_number) }));
-    } finally { setNumberLoading(false); }
-  }
-  useEffect(() => { loadNumber().catch(e => setError(e.message)); }, []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -53,7 +39,6 @@ export default function NewOrderPage() {
   const [formData, setFormData] = useState({
     date_of_entry: new Date().toISOString().split('T')[0],
     po_number: '',
-    order_number: '',
     client_id: null, // Select option object
     product_name_id: null,
     product_type_id: null,
@@ -123,8 +108,6 @@ export default function NewOrderPage() {
       }
 
       const payload = {
-        order_number: formData.order_number,
-        ...(String(suggestedNumber) === formData.order_number ? { expected_order_number: suggestedNumber } : {}),
         date_of_entry: formData.date_of_entry,
         po_number: formData.po_number,
         client_id: formData.client_id.value,
@@ -137,7 +120,6 @@ export default function NewOrderPage() {
         remark: formData.remark
       };
 
-      if (!/^[1-9]\d*$/.test(formData.order_number)) throw new Error('Enter a positive whole Order Number.');
       const data = await saveOrder('/api/orders', 'POST', payload);
       if (!data) return;
 
@@ -153,13 +135,11 @@ export default function NewOrderPage() {
         setTargetDays('');
         window.scrollTo(0, 0);
         showAlert('Success', 'Order saved successfully!');
-        await loadNumber().catch(err => setError('The order was saved, but the next number could not be loaded: ' + err.message));
       } else {
         router.push('/orders');
       }
 
     } catch (err) {
-      if (err.code === 'ORDER_NUMBER_CHANGED') await loadNumber().catch(() => {});
       setError(err.message);
     } finally {
       setSaving(false);
@@ -226,17 +206,10 @@ export default function NewOrderPage() {
       {numberingDialog}
 
       <form style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <label className="form-group"><span className="form-label">Serial Number</span>
-            <input className="form-input" aria-label="Serial Number" value="Assigned automatically on save" readOnly />
-          </label>
-          <label className="form-group"><span className="form-label">Order Number <span className="required">*</span></span>
-            <input className="form-input" aria-label="Order Number" inputMode="numeric" required value={formData.order_number} disabled={saving || numberLoading} onChange={e => setFormData({ ...formData, order_number: e.target.value.replace(/[^0-9]/g, '') })} />
-            <small>The next new order continues from this number. Editing an older order does not reset the sequence.</small>
-          </label>
-        </div>
-        {suggestedNumber === null && !numberLoading && <button type="button" className="btn btn-secondary" onClick={() => loadNumber().catch(e => setError(e.message))}>Retry loading Order Number</button>}
-        
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+          <strong>Order No.</strong> is assigned automatically when you save. It cannot be edited or reused.
+        </p>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div className="form-group">
             <label className="form-label">Date of Entry <span className="required">*</span></label>
@@ -349,7 +322,7 @@ export default function NewOrderPage() {
           
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <label className="form-label" style={{ marginBottom: 0 }}>Target Overdue</label>
+              <label className="form-label" style={{ marginBottom: 0 }}>Target Date / Due In Days (optional)</label>
               <div style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
                 <button 
                   type="button" 
@@ -415,7 +388,7 @@ export default function NewOrderPage() {
               type="button" 
               className="btn btn-secondary" 
               onClick={(e) => handleSubmit(e, true)}
-              disabled={saving || numberLoading || suggestedNumber === null}
+              disabled={saving}
             >
               Save & Add Another
             </button>
@@ -423,7 +396,7 @@ export default function NewOrderPage() {
               type="submit" 
               className="btn btn-primary" 
               onClick={(e) => handleSubmit(e, false)}
-              disabled={saving || numberLoading || suggestedNumber === null}
+              disabled={saving}
             >
               {saving ? 'Saving...' : 'Save Order'}
             </button>
