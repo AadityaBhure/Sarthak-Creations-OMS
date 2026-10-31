@@ -23,6 +23,7 @@ const PAGE_TITLES = {
   '/masters/deleted':        'Deleted Records',
   '/settings':               'Settings',
   '/help-desk':              'Help Desk',
+  '/contact-support':        'Contact Support',
 };
 
 function getTitle(pathname) {

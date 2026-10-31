@@ -73,6 +73,7 @@ const NAV_SECTIONS = [
     links: [
       { href: '/settings', label: 'Settings' },
       { href: '/help-desk', label: 'Help Desk' },
+      { href: '/contact-support', label: 'Contact Support' },
     ],
   },
 ];

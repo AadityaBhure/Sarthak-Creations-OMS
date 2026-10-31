@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import SupportContactButton from '@/components/SupportContactButton';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -236,6 +237,7 @@ export default function LoginPage() {
             {isRegistering ? 'Already have an account? Sign In' : 'Need an account? Register'}
           </button>
         </div>
+        <SupportContactButton />
       </div>
     </div>
   );
